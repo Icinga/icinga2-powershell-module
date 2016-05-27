@@ -367,6 +367,7 @@ function Icinga2AgentModule {
         $this.info('Installing new Icinga 2 Agent version...');
         Start-Process $this.getInstallerPath() -ArgumentList "/quiet" -wait;
         $this.info('Agent successfully updated.');
+        $this.setProperty('cur_install_dir', $this.getProperty('def_install_dir'));
         $this.setProperty('require_restart', 'true');
     }    
 
