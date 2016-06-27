@@ -12,7 +12,7 @@ function Icinga2AgentModule {
         # Agent configuration
         [string]$ParentZone,
         [bool]$AcceptConfig               = $TRUE,
-        [array]$Endpoints,
+        [array]$ParentEndpoints,
 
         # Agent installation / update
         [string]$DownloadUrl              = 'https://packages.icinga.org/windows/',
@@ -41,7 +41,7 @@ function Icinga2AgentModule {
         agent_version    = $InstallAgentVersion;
         parent_zone      = $ParentZone;
         accept_config    = $AcceptConfig;
-        endpoints        = $Endpoints;
+        endpoints        = $ParentEndpoints;
         download_url     = $DownloadUrl;
         allow_updates    = $AllowUpdates;
         installer_hashes = $InstallerHashes;
