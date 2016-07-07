@@ -201,7 +201,7 @@ function Icinga2AgentModule {
         $this.setProperty('initialized', $TRUE);
         # Set the default config dir
         $this.setProperty('config_dir', $Env:ProgramData + '\icinga2\etc\icinga2\');
-        $this.setProperty('api_dir', $Env:ProgramData + '\icinga2\var\lib\icinga2\api\');
+        $this.setProperty('api_dir', $Env:ProgramData + '\icinga2\var\lib\icinga2\api');
         # Generate endpoint nodes based on iput
         # parameters
         $this.generateEndpointNodes();
@@ -492,8 +492,9 @@ function Icinga2AgentModule {
     #
     $installer | Add-Member -membertype ScriptMethod -name 'flushIcingaApiDirectory' -value {    
         if (Test-Path $this.getApiDirectory()) {
-            $this.info('Flushing content of ' + $this.getApiDirectory());    
-            Get-ChildItem -Path $this.getApiDirectory() -Recurse | Remove-Item -force -recurse    
+            $this.info('Flushing content of ' + $this.getApiDirectory()); 
+            $folder = New-Object -ComObject Scripting.FileSystemObject;
+            $folder.DeleteFolder($this.getApiDirectory());        
         }
     }
 
@@ -863,12 +864,7 @@ object ApiListener "api" {
                 if ($this.shouldFlushIcingaApiDirectory()) {
                     $this.flushIcingaApiDirectory();
                 }
-                if ($this.hasCertificates()) {
-                    $this.restartAgent();
-                } else {
-                    $this.error('Skipped restart of Icinga 2 Agent. Required certificates not found. Please create them manually or by using this script.');
-                    return 1
-                }
+                $this.restartAgent();
             } else {
                 $this.info('No changes detected.');
             }
