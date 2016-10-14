@@ -281,7 +281,7 @@ function Icinga2AgentModule {
         $this.info('Downloading Icinga 2 Agent Binary from ' + $url + '  ...');
         $execptionMsg = '';
         Try {
-            $WebStatusCode = Invoke-WebRequest -Method Head -Uri "$url"
+            $WebStatusCode = Invoke-WebRequest -UseBasicParsing -Method Head -Uri "$url"
 
             if ($WebStatusCode.StatusCode -eq 200) {
                 Invoke-WebRequest "$url" -OutFile $this.getInstallerPath();
