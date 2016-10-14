@@ -494,7 +494,8 @@ function Icinga2AgentModule {
         if (Test-Path $this.getApiDirectory()) {
             $this.info('Flushing content of ' + $this.getApiDirectory()); 
             $folder = New-Object -ComObject Scripting.FileSystemObject;
-            $folder.DeleteFolder($this.getApiDirectory());        
+            $folder.DeleteFolder($this.getApiDirectory());
+            $this.setProperty('require_restart', 'true');			
         }
     }
 
@@ -860,10 +861,11 @@ object ApiListener "api" {
             $this.generateIcingaConfiguration();
             $this.applyPossibleConfigChanges();
 
+            if ($this.shouldFlushIcingaApiDirectory()) {
+                $this.flushIcingaApiDirectory();
+            }
+
             if ($this.madeChanges()) {
-                if ($this.shouldFlushIcingaApiDirectory()) {
-                    $this.flushIcingaApiDirectory();
-                }
                 $this.restartAgent();
             } else {
                 $this.info('No changes detected.');
