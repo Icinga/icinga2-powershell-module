@@ -380,7 +380,7 @@ function Icinga2AgentModule {
         $architecture = '';
         $icingaInstallerName = '';
         if ([IntPtr]::Size -eq 4) {
-            $defaultInstallDir = ${Env:ProgramFiles(x86)} + "\ICINGA2";
+            $defaultInstallDir = ${Env:ProgramFiles} + "\ICINGA2";
             $architecture = "x86";
             $regPath = 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*';
         } else {
