@@ -376,15 +376,13 @@ function Icinga2AgentModule {
     # ensure we access the Agent correctly
     #
     $installer | Add-Member -membertype ScriptMethod -name 'isAgentInstalled' -value {
-        $defaultInstallDir = '';
         $architecture = '';
         $icingaInstallerName = '';
+        $defaultInstallDir = ${Env:ProgramFiles} + "\ICINGA2";
         if ([IntPtr]::Size -eq 4) {
-            $defaultInstallDir = ${Env:ProgramFiles} + "\ICINGA2";
             $architecture = "x86";
             $regPath = 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*';
         } else {
-            $defaultInstallDir = ${Env:ProgramFiles} + "\ICINGA2";
             $architecture = "x86_64";
             $regPath = @('HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*', 'HKLM:\Software\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*');
         }
@@ -805,7 +803,7 @@ object ApiListener "api" {
                 if (-Not $this.hasCertificates()) {
                     $this.error('Icinga 2 certificates not found. Please generate the certificates over this module or add them manually.');
                 }
-                # $this.rollbackConfig();
+                $this.rollbackConfig();
                 if ($this.isIcingaConfigValid($FALSE)) {
                     $this.info('Rollback of Icinga 2 configuration successfull.');
                 } else {
