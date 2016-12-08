@@ -8,6 +8,8 @@ function Icinga2AgentModule {
         [string]$AgentName,
         [string]$Ticket,
         [string]$InstallAgentVersion,
+        [bool]$FetchAgentName            = $FALSE,
+        [bool]$FetchAgentFQDN            = $FALSE,
 
         # Agent configuration
         [string]$ParentZone,
@@ -24,6 +26,15 @@ function Icinga2AgentModule {
         [string]$CAServer,
         [int]$CAPort                      = 5665,
         [bool]$ForceCertificateGeneration = $FALSE,
+        
+        # Director communication
+        [string]$DirectorUrl,
+        [string]$DirectorUser,
+        [string]$DirectorPassword,
+        [string]$DirectorDomain,
+        [string]$DirectorAuthToken,
+        [string]$DirectorHostObject,
+        [bool]$DirectorDeployConfig       = $FALSE,
 
         #Internal handling
         [bool]$DebugMode                  = $FALSE
@@ -36,20 +47,29 @@ function Icinga2AgentModule {
     $installer = New-Object -TypeName PSObject;
     $installer | Add-Member -membertype NoteProperty -name 'properties' -value @{}
     $installer | Add-Member -membertype NoteProperty -name 'cfg' -value @{
-        agent_name       = $AgentName;
-        ticket           = $Ticket;
-        agent_version    = $InstallAgentVersion;
-        parent_zone      = $ParentZone;
-        accept_config    = $AcceptConfig;
-        endpoints        = $ParentEndpoints;
-        download_url     = $DownloadUrl;
-        allow_updates    = $AllowUpdates;
-        installer_hashes = $InstallerHashes;
-        flush_api_dir    = $FlushApiDirectory;
-        ca_server        = $CAServer;
-        ca_port          = $CAPort;
-        force_cert       = $ForceCertificateGeneration;
-        debug_mode       = $DebugMode;
+        agent_name              = $AgentName;
+        ticket                  = $Ticket;
+        agent_version           = $InstallAgentVersion;
+        get_agent_name          = $FetchAgentName;
+        get_agent_fqdn          = $FetchAgentFQDN;
+        parent_zone             = $ParentZone;
+        accept_config           = $AcceptConfig;
+        endpoints               = $ParentEndpoints;
+        download_url            = $DownloadUrl;
+        allow_updates           = $AllowUpdates;
+        installer_hashes        = $InstallerHashes;
+        flush_api_dir           = $FlushApiDirectory;
+        ca_server               = $CAServer;
+        ca_port                 = $CAPort;
+        force_cert              = $ForceCertificateGeneration;
+        director_url            = $DirectorUrl;
+        director_user           = $DirectorUser;
+        director_password       = $DirectorPassword;
+        director_domain         = $DirectorDomain;
+        director_auth_token     = $DirectorAuthToken;
+        director_host_json      = $DirectorHostObject;
+        director_deploy_config  = $DirectorDeployConfig;
+        debug_mode              = $DebugMode;
     }
 
     #
@@ -99,6 +119,14 @@ function Icinga2AgentModule {
     #
     $installer | Add-Member -membertype ScriptMethod -name 'setProperty' -value {
         param([string] $key, [string]$value)
+
+        # Initialse some variables first
+        # will only be called once
+        if (-Not $this.properties.Get_Item('initialized')) {
+            $this.properties.Set_Item('initialized', $TRUE);
+            $this.init();            
+        }
+
         $this.properties.Set_Item($key, $value);
     }
 
@@ -202,6 +230,8 @@ function Icinga2AgentModule {
         # Set the default config dir
         $this.setProperty('config_dir', $Env:ProgramData + '\icinga2\etc\icinga2\');
         $this.setProperty('api_dir', $Env:ProgramData + '\icinga2\var\lib\icinga2\api');
+        $this.setProperty('icinga_ticket', $this.config('ticket'));
+        $this.setProperty('local_hostname', $this.config('agent_name'));
         # Generate endpoint nodes based on iput
         # parameters
         $this.generateEndpointNodes();
@@ -246,6 +276,26 @@ function Icinga2AgentModule {
         } else {
             $this.setProperty('generate_config', 'false');
         }
+    }
+
+    #
+    # This function will ensure we create a
+    # Web Client object we can use entirely
+    # inside the module to achieve our requirements
+    #
+    $installer | Add-Member -membertype ScriptMethod -name 'createWebClientInstance' -value {
+
+        $webClient = New-Object System.Net.WebClient
+        if ($this.config('director_user') -And $this.config('director_password')) {
+            $domain = $null;
+            if ($this.config('director_domain')) {
+                $domain = $this.config('director_domain');
+            }
+            $webClient.Credentials = New-Object System.Net.NetworkCredential($this.config('director_user'), $this.config('director_password'), $domain);
+        }
+        $webClient.Headers.add('accept','application/json')
+
+        return $webClient;
     }
 
     #
@@ -539,19 +589,19 @@ object FileLogger "main-log" {
   path = LocalStateDir + "/log/icinga2/icinga2.log"
 }
 // TODO: improve establish connection handling
-object Endpoint "' + $this.config('agent_name') + '" {}
+object Endpoint "' + $this.getProperty('local_hostname') + '" {}
 ' + $this.getProperty('endpoint_objects') + '
 object Zone "' + $this.config('parent_zone') + '" {
   endpoints = [ ' + $this.getProperty('endpoint_nodes') +' ]
 }
 object Zone "director-global" { global = true }
-object Zone "' + $this.config('agent_name') + '" {
+object Zone "' + $this.getProperty('local_hostname') + '" {
   parent = "' + $this.config('parent_zone') + '"
-  endpoints = [ "' + $this.config('agent_name') + '" ]
+  endpoints = [ "' + $this.getProperty('local_hostname') + '" ]
 }
 object ApiListener "api" {
-  cert_path = SysconfDir + "/icinga2/pki/' + $this.config('agent_name') + '.crt"
-  key_path = SysconfDir + "/icinga2/pki/' + $this.config('agent_name') + '.key"
+  cert_path = SysconfDir + "/icinga2/pki/' + $this.getProperty('local_hostname') + '.crt"
+  key_path = SysconfDir + "/icinga2/pki/' + $this.getProperty('local_hostname') + '.key"
   ca_path = SysconfDir + "/icinga2/pki/ca.crt"
   accept_commands = true
   accept_config = ' + $this.convertBoolToString($this.config('accept_config')) + '
@@ -656,14 +706,14 @@ object ApiListener "api" {
     #
     $installer | Add-Member -membertype ScriptMethod -name 'generateCertificates' -value {
 
-        if ($this.config('agent_name') -And $this.config('ca_server') -And $this.config('ticket')) {
+        if ($this.getProperty('local_hostname') -And $this.config('ca_server') -And $this.getProperty('icinga_ticket')) {
             $icingaPkiDir = $this.getProperty('config_dir') + 'pki\';
             $icingaBinary = $this.getInstallPath() + '\sbin\icinga2.exe';
-            $agentName = $this.config('agent_name');
+            $agentName = $this.getProperty('local_hostname');
 
             # Generate the certificate
             $this.info("Generating Icinga 2 certificates");
-            $result = &$icingaBinary @('pki', 'new-cert', '--cn', $this.config('agent_name'), '--key', ($icingaPkiDir + $agentName + '.key'), '--cert', ($icingaPkiDir + $agentName + '.crt'));
+            $result = &$icingaBinary @('pki', 'new-cert', '--cn', $this.getProperty('local_hostname'), '--key', ($icingaPkiDir + $agentName + '.key'), '--cert', ($icingaPkiDir + $agentName + '.crt'));
             $this.printAndAssertResultBasedOnExitCode($result, $LASTEXITCODE);
 
             # Save Certificate
@@ -673,7 +723,7 @@ object ApiListener "api" {
 
             # Request certificate
             $this.info("Requesting Icinga 2 certificates");
-            $result = &$icingaBinary @('pki', 'request', '--host', $this.config('ca_server'), '--port', $this.config('ca_port'), '--ticket', $this.config('ticket'), '--key', ($icingaPkiDir + $agentName + '.key'), '--cert',  ($icingaPkiDir + $agentName + '.crt'), '--trustedcert', ($icingaPkiDir + 'trusted-master.crt'), '--ca', ($icingaPkiDir + 'ca.crt'));
+            $result = &$icingaBinary @('pki', 'request', '--host', $this.config('ca_server'), '--port', $this.config('ca_port'), '--ticket', $this.getProperty('icinga_ticket'), '--key', ($icingaPkiDir + $agentName + '.key'), '--cert',  ($icingaPkiDir + $agentName + '.crt'), '--trustedcert', ($icingaPkiDir + 'trusted-master.crt'), '--ca', ($icingaPkiDir + 'ca.crt'));
             $this.printAndAssertResultBasedOnExitCode($result, $LASTEXITCODE);
 
             $this.setProperty('require_restart', 'true');
@@ -689,7 +739,7 @@ object ApiListener "api" {
     #
     $installer | Add-Member -membertype ScriptMethod -name 'hasCertificates' -value {
         $icingaPkiDir = $this.getProperty('config_dir') + 'pki\';
-        $agentName = $this.config('agent_name');
+        $agentName = $this.getProperty('local_hostname');
         if (
             ((Test-Path ($icingaPkiDir + $agentName + '.key')) `
             -And (Test-Path ($icingaPkiDir + $agentName + '.crt')) `
@@ -751,7 +801,7 @@ object ApiListener "api" {
     # configuration are set
     #
     $installer | Add-Member -membertype ScriptMethod -name 'checkConfigInputParametersAndThrowException' -value {
-        if (-Not $this.config('agent_name')) {
+        if (-Not $this.getProperty('local_hostname')) {
             throw 'Argument -AgentName <name> required for config generation.';
         }
         if (-Not $this.config('parent_zone')) {
@@ -818,6 +868,77 @@ object ApiListener "api" {
     }
 
     #
+    # Ensure we get the hostname or FQDN
+    # from the PowerShell to make things more
+    # easier
+    #
+    $installer | Add-Member -membertype ScriptMethod -name 'getHostNameOrFQDN' -value {
+        if ($this.config('get_agent_fqdn') -And (Get-WmiObject win32_computersystem).Domain) {
+            [string]$hostname = (Get-WmiObject win32_computersystem).DNSHostName + '.' + (Get-WmiObject win32_computersystem).Domain;
+            $this.setProperty('local_hostname', $hostname);
+            $this.info('Setting internal Agent Name to ' + $this.getProperty('local_hostname'));
+        } elseif ($this.config('get_agent_name')) {
+            [string]$hostname = (Get-WmiObject win32_computersystem).DNSHostName;
+            $this.setProperty('local_hostname', $hostname);
+            $this.info('Setting internal Agent Name to ' + $this.getProperty('local_hostname'));
+        }
+    }
+
+    #
+    # This function will allow us to create a
+    # host object directly inside the Icinga Director
+    # with a provided JSON string
+    #
+    $installer | Add-Member -membertype ScriptMethod -name 'createHostInsideIcingaDirector' -value {
+        if ($this.config('director_url') -And $this.config('director_host_json')) {
+            try {
+                 # Setup our web client to call the direcor
+                $webClient = $this.createWebClientInstance();
+                # Replace the host object placeholder with the hostname or the FQDN
+                $host_object_json = $this.config('director_host_json').Replace('&hostname_placeholder&', $this.getProperty('local_hostname'));
+                # Create the host object inside the director
+                $result = $webClient.UploadString($this.config('director_url') + '/icingaweb2/director/host', 'PUT', "$host_object_json");
+                $this.info('Placed query for creating host ' + $this.getProperty('local_hostname') + ' inside Icinga Director. Result: ' + $result);
+
+                # Shall we deploy the config for the generated host?
+                if ($this.config('director_deploy_config')) {
+                    $webClient = $this.createWebClientInstance();
+                    $result = $webClient.DownloadString($this.config('director_url') + '/icingaweb2/director/config/deploy');
+                    $this.info('Deploying configuration from Icinga Director to Icinga. Result: ' + $result);
+                }
+            } catch {
+                $this.error('Failed to create host inside Icinga Director. Possibly the host already exists. Error: ' + $_.Exception.Message);
+            }
+        }
+    }
+
+    #
+    # This function will communicate directly with
+    # the Icinga Director and ensuring that we get
+    # some of the possible required informations
+    #
+    $installer | Add-Member -membertype ScriptMethod -name 'getTicketFromIcingaDirector' -value {
+        if ($this.config('director_url')) {
+            # Setup our web client to call the direcor
+            $webClient = $this.createWebClientInstance();        
+            # Try to fetch the ticket for the host
+            $ticket = $webClient.DownloadString($this.config('director_url') + '/icingaweb2/director/host/ticket?name=' + $this.getProperty('local_hostname'));
+            # Lookup all " inside the return string
+            $quotes = Select-String -InputObject $ticket -Pattern '"' -AllMatches
+            
+            # If we only got two ", we should have received a valid ticket
+            # Otherwise we need to throw an error
+            if ($quotes.Matches.Count -ne 2) {
+                throw 'Failed to fetch ticket for host ' + $this.getProperty('local_hostname') +'. Got ' + $ticket + ' as ticket.';
+            } else {
+                $ticket = $ticket.subString(1, $ticket.length - 3);
+                $this.info('Fetched ticket ' + $ticket + ' for host ' + $this.getProperty('local_hostname') + '.');
+                $this.setProperty('icinga_ticket', $ticket);
+            }
+        }
+    }
+
+    #
     # This function will try to load all
     # data from the system and setup the
     # entire Agent without user interaction
@@ -829,6 +950,14 @@ object ApiListener "api" {
             if (-Not $this.isAdmin()) {
                 return 1;
             }
+
+            # Get host name or FQDN if required
+            $this.getHostNameOrFQDN();            
+            # Try to create a host object inside the Icinga Director
+            $this.createHostInsideIcingaDirector();
+            # First check if we should get some parameters from the Icinga Director
+            $this.getTicketFromIcingaDirector();
+
             # Try to locate the current
             # Installation data from the Agent
             if ($this.isAgentInstalled()) {
