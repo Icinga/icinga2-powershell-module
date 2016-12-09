@@ -872,7 +872,7 @@ object ApiListener "api" {
     # from the PowerShell to make things more
     # easier
     #
-    $installer | Add-Member -membertype ScriptMethod -name 'getHostNameOrFQDN' -value {
+    $installer | Add-Member -membertype ScriptMethod -name 'fetchHostnameOrFQDN' -value {
         if ($this.config('get_agent_fqdn') -And (Get-WmiObject win32_computersystem).Domain) {
             [string]$hostname = (Get-WmiObject win32_computersystem).DNSHostName + '.' + (Get-WmiObject win32_computersystem).Domain;
             $this.setProperty('local_hostname', $hostname);
@@ -917,7 +917,7 @@ object ApiListener "api" {
     # the Icinga Director and ensuring that we get
     # some of the possible required informations
     #
-    $installer | Add-Member -membertype ScriptMethod -name 'getTicketFromIcingaDirector' -value {
+    $installer | Add-Member -membertype ScriptMethod -name 'fetchTicketFromIcingaDirector' -value {
         if ($this.config('director_url')) {
             # Setup our web client to call the direcor
             $webClient = $this.createWebClientInstance();        
@@ -925,7 +925,7 @@ object ApiListener "api" {
             $ticket = $webClient.DownloadString($this.config('director_url') + '/icingaweb2/director/host/ticket?name=' + $this.getProperty('local_hostname'));
             # Lookup all " inside the return string
             $quotes = Select-String -InputObject $ticket -Pattern '"' -AllMatches
-            
+
             # If we only got two ", we should have received a valid ticket
             # Otherwise we need to throw an error
             if ($quotes.Matches.Count -ne 2) {
@@ -952,11 +952,11 @@ object ApiListener "api" {
             }
 
             # Get host name or FQDN if required
-            $this.getHostNameOrFQDN();            
+            $this.fetchHostnameOrFQDN();            
             # Try to create a host object inside the Icinga Director
             $this.createHostInsideIcingaDirector();
             # First check if we should get some parameters from the Icinga Director
-            $this.getTicketFromIcingaDirector();
+            $this.fetchTicketFromIcingaDirector();
 
             # Try to locate the current
             # Installation data from the Agent
