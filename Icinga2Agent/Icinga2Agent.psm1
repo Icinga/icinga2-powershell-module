@@ -882,6 +882,10 @@ object ApiListener "api" {
             $this.setProperty('local_hostname', $hostname);
             $this.info('Setting internal Agent Name to ' + $this.getProperty('local_hostname'));
         }
+
+        if (-Not $this.getProperty('local_hostname')) {
+            $this.warn('You have not specified an Agent Name or turned on to auto fetch this information.');
+        }
     }
 
     #
@@ -890,7 +894,7 @@ object ApiListener "api" {
     # with a provided JSON string
     #
     $installer | Add-Member -membertype ScriptMethod -name 'createHostInsideIcingaDirector' -value {
-        if ($this.config('director_url') -And $this.config('director_host_json')) {
+        if ($this.config('director_url') -And $this.config('director_host_json') -And $this.getProperty('local_hostname')) {
             try {
                  # Setup our web client to call the direcor
                 $webClient = $this.createWebClientInstance();
@@ -918,14 +922,14 @@ object ApiListener "api" {
     # some of the possible required informations
     #
     $installer | Add-Member -membertype ScriptMethod -name 'fetchTicketFromIcingaDirector' -value {
-        if ($this.config('director_url')) {
+        if ($this.config('director_url') -And $this.getProperty('local_hostname')) {
             # Setup our web client to call the direcor
             $webClient = $this.createWebClientInstance();        
             # Try to fetch the ticket for the host
             $ticket = $webClient.DownloadString($this.config('director_url') + '/icingaweb2/director/host/ticket?name=' + $this.getProperty('local_hostname'));
             # Lookup all " inside the return string
             $quotes = Select-String -InputObject $ticket -Pattern '"' -AllMatches
-
+            
             # If we only got two ", we should have received a valid ticket
             # Otherwise we need to throw an error
             if ($quotes.Matches.Count -ne 2) {
