@@ -26,7 +26,8 @@ function Icinga2AgentModule {
         [string]$CAServer,
         [int]$CAPort                      = 5665,
         [bool]$ForceCertificateGeneration = $FALSE,
-        
+        [string]$CAFingerprint,
+
         # Director communication
         [string]$DirectorUrl,
         [string]$DirectorUser,
@@ -62,6 +63,7 @@ function Icinga2AgentModule {
         ca_server               = $CAServer;
         ca_port                 = $CAPort;
         force_cert              = $ForceCertificateGeneration;
+        ca_fingerprint          = $CAFingerprint;
         director_url            = $DirectorUrl;
         director_user           = $DirectorUser;
         director_password       = $DirectorPassword;
@@ -712,7 +714,7 @@ object ApiListener "api" {
             $agentName = $this.getProperty('local_hostname');
 
             # Generate the certificate
-            $this.info("Generating Icinga 2 certificates");
+            $this.info('Generating Icinga 2 certificates');
             $result = &$icingaBinary @('pki', 'new-cert', '--cn', $this.getProperty('local_hostname'), '--key', ($icingaPkiDir + $agentName + '.key'), '--cert', ($icingaPkiDir + $agentName + '.crt'));
             $this.printAndAssertResultBasedOnExitCode($result, $LASTEXITCODE);
 
@@ -720,6 +722,11 @@ object ApiListener "api" {
             $this.info("Storing Icinga 2 certificates");
             $result = &$icingaBinary @('pki', 'save-cert', '--key', ($icingaPkiDir + $agentName + '.key'), '--trustedcert', ($icingaPkiDir + 'trusted-master.crt'), '--host', $this.config('ca_server'));
             $this.printAndAssertResultBasedOnExitCode($result, $LASTEXITCODE);
+
+            # Validate if set against a given fingerprint for the CA
+            if (-Not $this.validateCertificate($icingaPkiDir + 'trusted-master.crt')) {
+                throw 'Failed to validate against CA authority';
+            }
 
             # Request certificate
             $this.info("Requesting Icinga 2 certificates");
@@ -730,6 +737,30 @@ object ApiListener "api" {
         } else  {
             $this.info('Skipping certificate generation. One or more of the following arguments is not set: -AgentName <name> -CAServer <server> -Ticket <ticket>');
         }
+    }
+
+    #
+    # Validate against a given fingerprint if we are connected to the correct CA
+    #
+    $installer | Add-Member -membertype ScriptMethod -name 'validateCertificate' -value {
+        param([string] $certificate)
+
+        $certFingerprint = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2
+        $certFingerprint.Import($certificate)
+        $this.info('Certificate fingerprint: ' + $certFingerprint.Thumbprint);
+
+        if ($this.config('ca_fingerprint')) {
+            if (-Not ($this.config('ca_fingerprint') -eq $certFingerprint.Thumbprint)) {
+                $this.error('CA fingerprint does not match! Expected: ' + $this.config('ca_fingerprint') + ', given: ' + $certFingerprint.Thumbprint);
+                return $FALSE;
+            } else {
+                $this.info('CA fingerprint validation successfull');
+                return $TRUE;
+            }
+        }
+
+        $this.warn('CA fingerprint validation disabled');
+        return $TRUE;
     }
 
     #
