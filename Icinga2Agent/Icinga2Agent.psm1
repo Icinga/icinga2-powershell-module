@@ -15,6 +15,7 @@ function Icinga2AgentModule {
         [string]$ParentZone,
         [bool]$AcceptConfig               = $TRUE,
         [array]$ParentEndpoints,
+        [array]$EndpointConfig,
 
         # Agent installation / update
         [string]$DownloadUrl              = 'https://packages.icinga.org/windows/',
@@ -56,6 +57,7 @@ function Icinga2AgentModule {
         parent_zone             = $ParentZone;
         accept_config           = $AcceptConfig;
         endpoints               = $ParentEndpoints;
+        endpoint_config         = $EndpointConfig;
         download_url            = $DownloadUrl;
         allow_updates           = $AllowUpdates;
         installer_hashes        = $InstallerHashes;
@@ -256,6 +258,55 @@ function Icinga2AgentModule {
     }
 
     #
+    # In case we want to define endpoint configuration (address / port)
+    # we will require to fetch data correctly from a given array
+    #
+    $installer | Add-Member -membertype ScriptMethod -name 'getEndpointConfigurationByArrayIndex' -value {
+        param([int] $currentIndex)
+
+        # Load the config into a local variable for quicker access
+        $endpoint_config = $this.config('endpoint_config');
+
+        # In case no endpoint config is given, we should do nothing
+        if ($endpoint_config.Count -eq 0) {
+            return '';
+        }
+
+        $config_string = '';
+        $configObject = '';
+        # In case we are only having one value, we have no need to handle
+        # multiple contents
+        if ($endpoint_config.Count -eq 1) {
+            # In case we only defined one endpoint config but got multiple
+            # endpoints, we only want to store the config for one endpoint
+            # and prevent data duplication
+            if ($currentIndex -eq 0) {
+                $configObject = $endpoint_config.Split(';');
+            } else {
+                # Return an empty string in case we try to load config
+                # for an endpoint which is not having one
+                return '';
+            }
+        } else {
+            # Let's handle multiple entries by their current index
+            if ($endpoint_config[$currentIndex]) {
+                $configObject = $endpoint_config[$currentIndex].Split(';');
+            }
+        }
+
+        # Write the host data from the first array position
+        if ($configObject[0]) {
+            $config_string += '  host = "' + $configObject[0] +'"';
+        }
+        # Write the port data from the second array position
+        if ($configObject[1]) {
+            $config_string += "`n"+'  port = ' + $configObject[1];
+        }
+        # Return the host and possible port configuration for this endpoint
+        return $config_string;
+    }
+
+    #
     # Build endpoint hosts and objects based
     # on configuration
     #
@@ -264,9 +315,16 @@ function Icinga2AgentModule {
         if ($this.config('endpoints')) {
             $endpoint_objects = '';
             $endpoint_nodes = '';
+
+            $endpoint_index = 0;
             foreach ($endpoint in $this.config('endpoints')) {
-                $endpoint_objects += 'object Endpoint "' + "$endpoint" +'"{}'+"`n";
+                #$endpoint_objects += 'object Endpoint "' + "$endpoint" +'"{}'+"`n";
+                $endpoint_objects += 'object Endpoint "' + "$endpoint" +'" {'+"`n";
+                $endpoint_objects += $this.getEndpointConfigurationByArrayIndex($endpoint_index);
+                Write-Host "Endpoint config: " $this.getEndpointConfigurationByArrayIndex($endpoint_index);
+                $endpoint_objects += "`n" + '}' + "`n";
                 $endpoint_nodes += '"' + "$endpoint" + '", ';
+                $endpoint_index += 1;
             }
             # Remove the last blank and , from the string
             if (-Not $endpoint_nodes.length -eq 0) {
@@ -615,17 +673,20 @@ object FileLogger "main-log" {
   severity = "information"
   path = LocalStateDir + "/log/icinga2/icinga2.log"
 }
-// TODO: improve establish connection handling
+
 object Endpoint "' + $this.getProperty('local_hostname') + '" {}
 ' + $this.getProperty('endpoint_objects') + '
 object Zone "' + $this.config('parent_zone') + '" {
   endpoints = [ ' + $this.getProperty('endpoint_nodes') +' ]
 }
-object Zone "director-global" { global = true }
+object Zone "director-global" {
+  global = true
+}
 object Zone "' + $this.getProperty('local_hostname') + '" {
   parent = "' + $this.config('parent_zone') + '"
   endpoints = [ "' + $this.getProperty('local_hostname') + '" ]
 }
+
 object ApiListener "api" {
   cert_path = SysconfDir + "/icinga2/pki/' + $this.getProperty('local_hostname') + '.crt"
   key_path = SysconfDir + "/icinga2/pki/' + $this.getProperty('local_hostname') + '.key"
