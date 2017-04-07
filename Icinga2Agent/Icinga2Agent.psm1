@@ -320,6 +320,16 @@ function Icinga2AgentModule {
 
         return $TRUE;
     }
+    
+    #
+    # We could try to install the Agent from a local directory
+    #
+    $installer | Add-Member -membertype ScriptMethod -name 'isDownloadPathLocal' -value {
+        if (Test-Path ($this.config('download_url'))) {
+            return $TRUE;
+        }
+        return $FALSE;
+    }
 
     #
     # Download the Icinga 2 Agent Installer from out defined source
@@ -328,18 +338,23 @@ function Icinga2AgentModule {
         if (-Not $this.config('agent_version')) {
             return;
         }
-        $url = $this.config('download_url') + $this.getProperty('install_msi_package');
-        $this.info('Downloading Icinga 2 Agent Binary from ' + $url + '  ...');
 
-        Try {
-            $client = new-object System.Net.WebClient;
-            $client.DownloadFile($url, $this.getInstallerPath());
+        if ($this.isDownloadPathLocal()) {
+            $this.info('Installing Icinga 2 Agent from local directory');
+        } else {
+            $url = $this.config('download_url') + $this.getProperty('install_msi_package');
+            $this.info('Downloading Icinga 2 Agent Binary from ' + $url + '  ...');
 
-            if (-Not $this.installerExists()) {
-                throw 'Unable to locate downloaded Icinga 2 Agent installer file from ' + $url + '. Download destination: ' + $this.getInstallerPath();
+            Try {
+                $client = new-object System.Net.WebClient;
+                $client.DownloadFile($url, $this.getInstallerPath());
+
+                if (-Not $this.installerExists()) {
+                    throw 'Unable to locate downloaded Icinga 2 Agent installer file from ' + $url + '. Download destination: ' + $this.getInstallerPath();
+                }
+            } catch {
+                throw 'Unable to download Icinga 2 Agent from ' + $url + '. Please ensure the link does exist and access is possible. Error: ' + $_.Exception.Message;
             }
-        } catch {
-            throw 'Unable to download Icinga 2 Agent from ' + $url + '. Please ensure the link does exist and access is possible. Error: ' + $_.Exception.Message;
         }
     }
 
@@ -370,7 +385,15 @@ function Icinga2AgentModule {
     # Returns the full path to our installer package
     #
     $installer | Add-Member -membertype ScriptMethod -name 'getInstallerPath' -value {
-        return $Env:temp + '\' + $this.getProperty('install_msi_package');
+        if ($this.isDownloadPathLocal()) {
+            if (Test-Path ($this.config('download_url') + $this.getProperty('install_msi_package'))) {
+                return $this.config('download_url') + $this.getProperty('install_msi_package');
+            } else {
+                throw 'Failed to locate local Icinga 2 Agent installer at ' + $this.config('download_url') + $this.getProperty('install_msi_package');
+            }
+        } else {
+            return $Env:temp + '\' + $this.getProperty('install_msi_package');
+        }
     }
 
     #
@@ -512,9 +535,11 @@ function Icinga2AgentModule {
     # Allow us to restart the Icinga 2 Agent
     #
     $installer | Add-Member -membertype ScriptMethod -name 'cleanupAgentInstaller' -value {
-        if (Test-Path $this.getInstallerPath()) {
-            $this.info('Removing downloaded Icinga 2 Agent installer');
-            Remove-Item $this.getInstallerPath() | out-null
+        if (-Not ($this.isDownloadPathLocal())) {
+            if (Test-Path $this.getInstallerPath()) {
+                $this.info('Removing downloaded Icinga 2 Agent installer');
+                Remove-Item $this.getInstallerPath() | out-null
+            }
         }
     }
 
