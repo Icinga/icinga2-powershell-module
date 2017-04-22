@@ -57,7 +57,7 @@ function Icinga2AgentModule {
         parent_zone             = $ParentZone;
         accept_config           = $AcceptConfig;
         endpoints               = $ParentEndpoints;
-        endpoint_config         = $EndpointConfig;
+        endpoint_config         = $EndpointsConfig;
         download_url            = $DownloadUrl;
         allow_updates           = $AllowUpdates;
         installer_hashes        = $InstallerHashes;
