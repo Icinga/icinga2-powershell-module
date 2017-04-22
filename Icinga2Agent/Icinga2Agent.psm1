@@ -321,7 +321,6 @@ function Icinga2AgentModule {
                 #$endpoint_objects += 'object Endpoint "' + "$endpoint" +'"{}'+"`n";
                 $endpoint_objects += 'object Endpoint "' + "$endpoint" +'" {'+"`n";
                 $endpoint_objects += $this.getEndpointConfigurationByArrayIndex($endpoint_index);
-                Write-Host "Endpoint config: " $this.getEndpointConfigurationByArrayIndex($endpoint_index);
                 $endpoint_objects += "`n" + '}' + "`n";
                 $endpoint_nodes += '"' + "$endpoint" + '", ';
                 $endpoint_index += 1;
