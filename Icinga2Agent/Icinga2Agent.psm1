@@ -265,43 +265,33 @@ function Icinga2AgentModule {
         param([int] $currentIndex)
 
         # Load the config into a local variable for quicker access
-        $endpoint_config = $this.config('endpoint_config');
+        [array]$endpoint_config = $this.config('endpoint_config');
 
         # In case no endpoint config is given, we should do nothing
-        if ($endpoint_config.Count -eq 0) {
+        if ($endpoint_config -eq $NULL) {
             return '';
         }
 
-        $config_string = '';
-        $configObject = '';
-        # In case we are only having one value, we have no need to handle
-        # multiple contents
-        if ($endpoint_config.Count -eq 1) {
-            # In case we only defined one endpoint config but got multiple
-            # endpoints, we only want to store the config for one endpoint
-            # and prevent data duplication
-            if ($currentIndex -eq 0) {
-                $configObject = $endpoint_config.Split(';');
-            } else {
-                # Return an empty string in case we try to load config
-                # for an endpoint which is not having one
-                return '';
-            }
+        [string]$configArgument = $endpoint_config[$currentIndex]
+        [string]$config_string = '';
+        [array]$configObject = '';
+
+        if ($configArgument -ne '') {
+            $configObject = $configArgument.Split(';');
         } else {
-            # Let's handle multiple entries by their current index
-            if ($endpoint_config[$currentIndex]) {
-                $configObject = $endpoint_config[$currentIndex].Split(';');
-            }
+            return '';
         }
 
         # Write the host data from the first array position
         if ($configObject[0]) {
             $config_string += '  host = "' + $configObject[0] +'"';
         }
+
         # Write the port data from the second array position
         if ($configObject[1]) {
             $config_string += "`n"+'  port = ' + $configObject[1];
         }
+
         # Return the host and possible port configuration for this endpoint
         return $config_string;
     }
