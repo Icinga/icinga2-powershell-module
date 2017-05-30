@@ -722,6 +722,7 @@ object ApiListener "api" {
         $algorithm = new-object System.Security.Cryptography.SHA1Managed
         $hash = [System.Text.Encoding]::UTF8.GetBytes($text)
         $hashInBytes = $algorithm.ComputeHash($hash)
+        $result = '';
         foreach($byte in $hashInBytes) {
              $result += $byte.ToString()
         }
