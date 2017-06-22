@@ -10,6 +10,7 @@ function Icinga2AgentModule {
         [string]$InstallAgentVersion,
         [bool]$FetchAgentName            = $FALSE,
         [bool]$FetchAgentFQDN            = $FALSE,
+        [int]$TransformHostname          = 0,
 
         # Agent configuration
         [string]$ParentZone,
@@ -54,6 +55,7 @@ function Icinga2AgentModule {
         agent_version           = $InstallAgentVersion;
         get_agent_name          = $FetchAgentName;
         get_agent_fqdn          = $FetchAgentFQDN;
+        transform_hostname      = $TransformHostname;
         parent_zone             = $ParentZone;
         accept_config           = $AcceptConfig;
         endpoints               = $ParentEndpoints;
@@ -995,6 +997,24 @@ object ApiListener "api" {
     }
 
     #
+    # Transform the hostname to upper or lower case if required
+    # 0: Do nothing (default)
+    # 1: Transform to lower case
+    # 2: Transform to upper case
+    #
+    $installer | Add-Member -MemberType ScriptMethod -name 'doTransformHostname' -Value {
+        [string]$hostname = $this.getProperty('local_hostname');
+        [int]$type = $this.config('transform_hostname');
+        switch ($type) {
+            1 { $hostname = $hostname.ToLower(); }
+            2 { $hostname = $hostname.ToUpper(); }
+            Default {} # Do nothing by default
+        }
+
+        $this.setProperty('local_hostname', $hostname);
+    }
+
+    #
     # This function will allow us to create a
     # host object directly inside the Icinga Director
     # with a provided JSON string
@@ -1062,7 +1082,9 @@ object ApiListener "api" {
             }
 
             # Get host name or FQDN if required
-            $this.fetchHostnameOrFQDN();            
+            $this.fetchHostnameOrFQDN();
+            # Transform the hostname if required
+            $this.doTransformHostname();
             # Try to create a host object inside the Icinga Director
             $this.createHostInsideIcingaDirector();
             # First check if we should get some parameters from the Icinga Director
