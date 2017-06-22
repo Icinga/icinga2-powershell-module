@@ -40,7 +40,7 @@ function Icinga2AgentModule {
 
         #Internal handling
         [bool]$DebugMode                  = $FALSE
-    )
+    );
 
     #
     # Initialise our installer object
@@ -83,8 +83,8 @@ function Icinga2AgentModule {
     # the script with the parameters
     #
     $installer | Add-Member -membertype ScriptMethod -name 'config' -value {
-        param([string] $key)
-        return $this.cfg[$key]
+        param([string] $key);
+        return $this.cfg[$key];
     }
 
     #
@@ -92,7 +92,7 @@ function Icinga2AgentModule {
     # to a string value
     #
     $installer | Add-Member -membertype ScriptMethod -name 'convertBoolToString' -value {
-        param([bool]$key)
+        param([bool]$key);
         if ($key) {
             return 'true';
         }
@@ -105,7 +105,7 @@ function Icinga2AgentModule {
     # $this.getProperty('agent_version)
     #
     $installer | Add-Member -membertype ScriptMethod -name 'getProperty' -value {
-        param([string] $key)
+        param([string] $key);
 
         # Initialse some variables first
         # will only be called once
@@ -122,7 +122,7 @@ function Icinga2AgentModule {
     # $this.setProperty('agent_version', '2.4.10')
     #
     $installer | Add-Member -membertype ScriptMethod -name 'setProperty' -value {
-        param([string] $key, [string]$value)
+        param([string] $key, [string]$value);
 
         # Initialse some variables first
         # will only be called once
@@ -140,7 +140,7 @@ function Icinga2AgentModule {
     # purposes
     #
     $installer | Add-Member -membertype ScriptMethod -name 'dumpProperties' -value {
-        echo $this.properties;
+        Write-Output $this.properties;
     }
 
     #
@@ -154,7 +154,7 @@ function Icinga2AgentModule {
     # Deprecated: Do no longer use!
     #
     $installer | Add-Member -membertype ScriptMethod -name 'exception' -value {
-        param([string]$message, [string[]]$args)
+        param([string]$message, [string[]]$args);
         $Error.clear();
         $this.warn('Calling deprecated function exception. Use throw instead.');
         throw 'Exception: ' + $message;
@@ -182,7 +182,7 @@ function Icinga2AgentModule {
     # (0 = ok, anything else => exception)
     #
     $installer | Add-Member -membertype ScriptMethod -name 'printAndAssertResultBasedOnExitCode' -value {
-        param([string]$result, [string]$exitcode)
+        param([string]$result, [string]$exitcode);
         if ($exitcode -ne 0) {
             throw $result;
         } else {
@@ -194,7 +194,7 @@ function Icinga2AgentModule {
     # Return an error message with red text
     #
     $installer | Add-Member -membertype ScriptMethod -name 'error' -value {
-        param([string] $message, [array] $args)
+        param([string] $message, [array] $args);
         Write-Host 'Error:' $message -ForegroundColor red;
     }
 
@@ -202,7 +202,7 @@ function Icinga2AgentModule {
     # Return a warning message with yellow text
     #
     $installer | Add-Member -membertype ScriptMethod -name 'warn' -value {
-        param([string] $message, [array] $args)
+        param([string] $message, [array] $args);
         Write-Host 'Warning:' $message -ForegroundColor yellow;
     }
 
@@ -210,7 +210,7 @@ function Icinga2AgentModule {
     # Return a info message with green text
     #
     $installer | Add-Member -membertype ScriptMethod -name 'info' -value {
-        param([string] $message, [array] $args)
+        param([string] $message, [array] $args);
         Write-Host 'Notice:' $message -ForegroundColor green;
     }
 
@@ -219,7 +219,7 @@ function Icinga2AgentModule {
     # in case debug mode is enabled
     #
     $installer | Add-Member -membertype ScriptMethod -name 'debug' -value {
-        param([string] $message, [array] $args)
+        param([string] $message, [array] $args);
         if ($this.config('debug_mode')) {
             Write-Host 'Debug:' $message -ForegroundColor blue;
         }
@@ -247,8 +247,8 @@ function Icinga2AgentModule {
     # rights first. Otherwise abort the script.
     #
     $installer | Add-Member -membertype ScriptMethod -name 'isAdmin' -value {
-        $identity = [System.Security.Principal.WindowsIdentity]::GetCurrent()
-        $principal = New-Object System.Security.Principal.WindowsPrincipal($identity)
+        $identity = [System.Security.Principal.WindowsIdentity]::GetCurrent();
+        $principal = New-Object System.Security.Principal.WindowsPrincipal($identity);
 
         if (-not $principal.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)) {
             throw 'You require to run this script as administrator.';
@@ -262,7 +262,7 @@ function Icinga2AgentModule {
     # we will require to fetch data correctly from a given array
     #
     $installer | Add-Member -membertype ScriptMethod -name 'getEndpointConfigurationByArrayIndex' -value {
-        param([int] $currentIndex)
+        param([int] $currentIndex);
 
         # Load the config into a local variable for quicker access
         [array]$endpoint_config = $this.config('endpoint_config');
@@ -272,7 +272,7 @@ function Icinga2AgentModule {
             return '';
         }
 
-        [string]$configArgument = $endpoint_config[$currentIndex]
+        [string]$configArgument = $endpoint_config[$currentIndex];
         [string]$config_string = '';
         [array]$configObject = '';
 
@@ -308,7 +308,6 @@ function Icinga2AgentModule {
 
             $endpoint_index = 0;
             foreach ($endpoint in $this.config('endpoints')) {
-                #$endpoint_objects += 'object Endpoint "' + "$endpoint" +'"{}'+"`n";
                 $endpoint_objects += 'object Endpoint "' + "$endpoint" +'" {'+"`n";
                 $endpoint_objects += $this.getEndpointConfigurationByArrayIndex($endpoint_index);
                 $endpoint_objects += "`n" + '}' + "`n";
@@ -334,7 +333,7 @@ function Icinga2AgentModule {
     #
     $installer | Add-Member -membertype ScriptMethod -name 'createWebClientInstance' -value {
 
-        $webClient = New-Object System.Net.WebClient
+        $webClient = New-Object System.Net.WebClient;
         if ($this.config('director_user') -And $this.config('director_password')) {
             $domain = $null;
             if ($this.config('director_domain')) {
@@ -342,7 +341,7 @@ function Icinga2AgentModule {
             }
             $webClient.Credentials = New-Object System.Net.NetworkCredential($this.config('director_user'), $this.config('director_password'), $domain);
         }
-        $webClient.Headers.add('accept','application/json')
+        $webClient.Headers.add('accept','application/json');
 
         return $webClient;
     }
@@ -499,7 +498,6 @@ function Icinga2AgentModule {
     #
     $installer | Add-Member -membertype ScriptMethod -name 'isAgentInstalled' -value {
         $architecture = '';
-        $icingaInstallerName = '';
         $defaultInstallDir = ${Env:ProgramFiles} + "\ICINGA2";
         if ([IntPtr]::Size -eq 4) {
             $architecture = "x86";
@@ -514,14 +512,14 @@ function Icinga2AgentModule {
             .{
                 process {
                     if ($_.DisplayName) {
-                        $_
+                        $_;
                     }
                 }
             } |
-            Where {
-                $_.DisplayName -eq 'Icinga 2'
+            Where-Object {
+                $_.DisplayName -eq 'Icinga 2';
             } |
-            Select-Object -Property InstallLocation, UninstallString, DisplayVersion
+            Select-Object -Property InstallLocation, UninstallString, DisplayVersion;
 
         if ($localData.UninstallString) {
             $this.setProperty('uninstall_id', $localData.UninstallString.Replace("MsiExec.exe ", ""));
@@ -570,7 +568,7 @@ function Icinga2AgentModule {
         # Only procceed with backup of the current config if no backup was found
         if (Test-Path $configFile) {
             if (-Not (Test-Path $configBackupFile)) {
-                ren $configFile $configBackupFile;
+                Rename-Item $configFile $configBackupFile;
                 $this.info('Icinga 2 configuration backup successfull');
             } else {
                 $this.warn('Default icinga2.conf backup detected. Skipping backup');
@@ -585,7 +583,7 @@ function Icinga2AgentModule {
         if (-Not ($this.isDownloadPathLocal())) {
             if (Test-Path $this.getInstallerPath()) {
                 $this.info('Removing downloaded Icinga 2 Agent installer');
-                Remove-Item $this.getInstallerPath() | out-null
+                Remove-Item $this.getInstallerPath() | out-null;
             }
         }
     }
@@ -682,7 +680,7 @@ object ApiListener "api" {
   ca_path = SysconfDir + "/icinga2/pki/ca.crt"
   accept_commands = true
   accept_config = ' + $this.convertBoolToString($this.config('accept_config')) + '
-}'
+}';
 
             $this.setProperty('new_icinga_config', $icingaNewConfig);
             $this.setProperty('old_icinga_config', $icingaCurrentConfig);
@@ -718,13 +716,13 @@ object ApiListener "api" {
     # Generate a SHA1 Hash from a provided string
     #
     $installer | Add-Member -membertype ScriptMethod -name 'getHashFromString' -value {
-        param([string]$text)
-        $algorithm = new-object System.Security.Cryptography.SHA1Managed
-        $hash = [System.Text.Encoding]::UTF8.GetBytes($text)
-        $hashInBytes = $algorithm.ComputeHash($hash)
+        param([string]$text);
+        $algorithm = new-object System.Security.Cryptography.SHA1Managed;
+        $hash = [System.Text.Encoding]::UTF8.GetBytes($text);
+        $hashInBytes = $algorithm.ComputeHash($hash);
         $result = '';
         foreach($byte in $hashInBytes) {
-             $result += $byte.ToString()
+             $result += $byte.ToString();
         }
         return $result;
     }
@@ -766,7 +764,7 @@ object ApiListener "api" {
     # exception
     #
     $installer | Add-Member -membertype ScriptMethod -name 'printResultOkOrException' -value {
-        param([string]$result, [string]$expected)
+        param([string]$result, [string]$expected);
         if ($result -And $expected) {
             if (-Not ($result -Like $expected)) {
                 throw $result;
@@ -819,10 +817,10 @@ object ApiListener "api" {
     # Validate against a given fingerprint if we are connected to the correct CA
     #
     $installer | Add-Member -membertype ScriptMethod -name 'validateCertificate' -value {
-        param([string] $certificate)
+        param([string] $certificate);
 
-        $certFingerprint = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2
-        $certFingerprint.Import($certificate)
+        $certFingerprint = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2;
+        $certFingerprint.Import($certificate);
         $this.info('Certificate fingerprint: ' + $certFingerprint.Thumbprint);
 
         if ($this.config('ca_fingerprint')) {
@@ -874,7 +872,7 @@ object ApiListener "api" {
             return $TRUE;
         }
 
-        return $FALSE
+        return $FALSE;
     }
 
     #
@@ -924,13 +922,14 @@ object ApiListener "api" {
     # to ensure the configuration is valid
     #
     $installer | Add-Member -membertype ScriptMethod -name 'isIcingaConfigValid' -value {
-        param([bool] $checkInternal = $TRUE)
+        param([bool] $checkInternal = $TRUE);
         if (-Not $this.config('parent_zone') -And $checkInternal) {
             throw 'Parent Zone not defined. Please specify it with -ParentZone <name>';
         }
         $icingaBinary = $this.getInstallPath() + '\sbin\icinga2.exe';
         $output = &$icingaBinary @('daemon', '-C');
         if ($LASTEXITCODE -ne 0) {
+            $this.error($output);
             return $FALSE;
         }
         return $TRUE;
@@ -1030,12 +1029,12 @@ object ApiListener "api" {
     #
     $installer | Add-Member -membertype ScriptMethod -name 'fetchTicketFromIcingaDirector' -value {
         if ($this.config('director_url') -And $this.getProperty('local_hostname')) {
-            # Setup our web client to call the direcor
+            # Setup our web client to call the director
             $webClient = $this.createWebClientInstance();        
             # Try to fetch the ticket for the host
             $ticket = $webClient.DownloadString($this.config('director_url') + '/icingaweb2/director/host/ticket?name=' + $this.getProperty('local_hostname'));
             # Lookup all " inside the return string
-            $quotes = Select-String -InputObject $ticket -Pattern '"' -AllMatches
+            $quotes = Select-String -InputObject $ticket -Pattern '"' -AllMatches;
             
             # If we only got two ", we should have received a valid ticket
             # Otherwise we need to throw an error
@@ -1082,7 +1081,7 @@ object ApiListener "api" {
                     $this.info('Icinga 2 Agent is up-to-date. Nothing to do.');
                 }
             } else {
-                if ($this.canInstallAgent()){
+                if ($this.canInstallAgent()) {
                     $this.installAgent();
                     $this.cleanupAgentInstaller();
                 } else {
@@ -1108,12 +1107,12 @@ object ApiListener "api" {
             } else {
                 $this.info('No changes detected.');
             }
-            return 0
+            return 0;
         } catch {
             $this.printLastException();
-            return 1
+            return 1;
         }
     }
 
-    return $installer
+    return $installer;
 }
