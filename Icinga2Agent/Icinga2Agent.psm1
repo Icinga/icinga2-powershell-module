@@ -420,9 +420,9 @@ function Icinga2AgentModule {
             return;
         }
 
-        $installerHash = Get-FileHash $this.getInstallerPath() -Algorithm "SHA1";
+        [string]$installerHash = $this.getInstallerFileHash($this.getInstallerPath());
         foreach($hash in $this.config('installer_hashes')) {
-            if ($hash -eq $installerHash.Hash) {
+            if ($hash -eq $installerHash) {
                 $this.info('Icinga 2 Agent hash verification successfull.');
                 return;
             }
@@ -430,6 +430,24 @@ function Icinga2AgentModule {
 
         throw 'Failed to verify against any provided installer hash.';
         return;
+    }
+
+    #
+    # Get the SHA1 hash from our uninstaller file
+    # Own function required because Get-FileHash is not
+    # supported by PowerShell Version 2
+    #
+    $installer | Add-Member -membertype ScriptMethod -name 'getInstallerFileHash' -value {
+        param([string]$filename);
+
+        [System.Object]$fileInput = New-Object System.IO.FileStream($filename,[System.IO.FileMode]::Open);
+        [System.Object]$hash = New-Object System.Text.StringBuilder;
+        [System.Security.Cryptography.HashAlgorithm]::Create('SHA1').ComputeHash($fileInput) |
+            ForEach-Object {
+                [Void]$hash.Append($_.ToString("x2"));
+            }
+        $fileInput.Close();
+        return $hash.ToString().ToUpper();
     }
 
     #
