@@ -39,6 +39,9 @@ function Icinga2AgentModule {
         [string]$DirectorHostObject,
         [bool]$DirectorDeployConfig       = $FALSE,
 
+        # Uninstaller arguments
+        [bool]$FullUninstallation         = $FALSE,
+
         #Internal handling
         [bool]$DebugMode                  = $FALSE
     );
@@ -75,6 +78,7 @@ function Icinga2AgentModule {
         director_auth_token     = $DirectorAuthToken;
         director_host_json      = $DirectorHostObject;
         director_deploy_config  = $DirectorDeployConfig;
+        full_uninstallation     = $FullUninstallation;
         debug_mode              = $DebugMode;
     }
 
@@ -1134,6 +1138,41 @@ object ApiListener "api" {
             $this.printLastException();
             return 1;
         }
+    }
+
+    #
+    # Removes the Icinga 2 Agent from the system
+    #
+    $installer | Add-Member -membertype ScriptMethod -name 'uninstallIcinga2Agent' -value {
+        $this.info('Trying to locate Icinga 2 Agent...');
+
+        [System.Object]$icingaAgent = Get-WmiObject -Class Win32_Product |
+            Where-Object {
+                $_.Name -like "Icinga 2";
+            };
+
+        if ($icingaAgent -ne $null) {
+            [string]$icingaVersion = $icingaAgent.Version;
+            $this.info('Found Icinga 2 Agent version ' + $icingaVersion + '. Starting uninstaller process');
+            $icingaAgent.Uninstall() | Out-Null;
+            $this.info('Icinga 2 Agent successfully removed.');
+        } else {
+            $this.warn('Icinga 2 Agent could not be found on the system.');
+        }
+
+        if ($this.config('full_uninstallation')) {
+            $this.info('Flushing Icinga 2 program data directory...');
+            if (Test-Path ($Env:ProgramData + '\icinga2\')) {
+                $this.info('Removing downloaded Icinga 2 Agent installer');
+                [System.Object]$folder = New-Object -ComObject Scripting.FileSystemObject;
+                $folder.DeleteFolder($Env:ProgramData + '\icinga2');
+                $this.info('Remaining Icinga 2 configuration successfully removed.');
+            } else {
+                $this.warn('Icinga 2 Agent program directory not present.');
+            }
+        }
+
+        return 0;
     }
 
     return $installer;
