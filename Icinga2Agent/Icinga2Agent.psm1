@@ -238,8 +238,7 @@ function Icinga2AgentModule {
         $this.setProperty('api_dir', $Env:ProgramData + '\icinga2\var\lib\icinga2\api');
         $this.setProperty('icinga_ticket', $this.config('ticket'));
         $this.setProperty('local_hostname', $this.config('agent_name'));
-        # Generate endpoint nodes based on iput
-        # parameters
+        # Generate endpoint nodes based on input parameters
         $this.generateEndpointNodes();
     }
 
@@ -305,10 +304,10 @@ function Icinga2AgentModule {
     $installer | Add-Member -membertype ScriptMethod -name 'generateEndpointNodes' -value {
 
         if ($this.config('endpoints')) {
-            $endpoint_objects = '';
-            $endpoint_nodes = '';
+            [string]$endpoint_objects = '';
+            [string]$endpoint_nodes = '';
+            [int]$endpoint_index = 0;
 
-            $endpoint_index = 0;
             foreach ($endpoint in $this.config('endpoints')) {
                 $endpoint_objects += 'object Endpoint "' + "$endpoint" +'" {'+"`n";
                 $endpoint_objects += $this.getEndpointConfigurationByArrayIndex($endpoint_index);
@@ -335,9 +334,9 @@ function Icinga2AgentModule {
     #
     $installer | Add-Member -membertype ScriptMethod -name 'createWebClientInstance' -value {
 
-        $webClient = New-Object System.Net.WebClient;
+        [System.Object]$webClient = New-Object System.Net.WebClient;
         if ($this.config('director_user') -And $this.config('director_password')) {
-            $domain = $null;
+            [string]$domain = $null;
             if ($this.config('director_domain')) {
                 $domain = $this.config('director_domain');
             }
@@ -394,7 +393,7 @@ function Icinga2AgentModule {
             $this.info('Downloading Icinga 2 Agent Binary from ' + $url + '  ...');
 
             Try {
-                $client = new-object System.Net.WebClient;
+                [System.Object]$client = New-Object System.Net.WebClient;
                 $client.DownloadFile($url, $this.getInstallerPath());
 
                 if (-Not $this.installerExists()) {
@@ -499,8 +498,8 @@ function Icinga2AgentModule {
     # ensure we access the Agent correctly
     #
     $installer | Add-Member -membertype ScriptMethod -name 'isAgentInstalled' -value {
-        $architecture = '';
-        $defaultInstallDir = ${Env:ProgramFiles} + "\ICINGA2";
+        [string]$architecture = '';
+        [string]$defaultInstallDir = ${Env:ProgramFiles} + "\ICINGA2";
         if ([IntPtr]::Size -eq 4) {
             $architecture = "x86";
             $regPath = 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*';
@@ -547,7 +546,7 @@ function Icinga2AgentModule {
     # the correct, valid installation path
     #
     $installer | Add-Member -membertype ScriptMethod -name 'getInstallPath' -value {
-        $agentPath = $this.getProperty('def_install_dir');
+        [string]$agentPath = $this.getProperty('def_install_dir');
         if ($this.getProperty('cur_install_dir')) {
             $agentPath = $this.getProperty('cur_install_dir');
         }
@@ -563,8 +562,8 @@ function Icinga2AgentModule {
     # use them later again
     #
     $installer | Add-Member -membertype ScriptMethod -name 'backupDefaultConfig' -value {
-        $configFile = $this.getProperty('config_dir') + 'icinga2.conf';
-        $configBackupFile = $configFile + 'director.bak';
+        [string]$configFile = $this.getProperty('config_dir') + 'icinga2.conf';
+        [string]$configBackupFile = $configFile + 'director.bak';
 
         # Check if a config and backup file already exists
         # Only procceed with backup of the current config if no backup was found
@@ -613,7 +612,7 @@ function Icinga2AgentModule {
     $installer | Add-Member -membertype ScriptMethod -name 'flushIcingaApiDirectory' -value {
         if (Test-Path $this.getApiDirectory()) {
             $this.info('Flushing content of ' + $this.getApiDirectory());
-            $folder = New-Object -ComObject Scripting.FileSystemObject;
+            [System.Object]$folder = New-Object -ComObject Scripting.FileSystemObject;
             $folder.DeleteFolder($this.getApiDirectory());
             $this.setProperty('require_restart', 'true');
         }
@@ -642,12 +641,12 @@ function Icinga2AgentModule {
 
             $this.checkConfigInputParametersAndThrowException();
 
-            $icingaCurrentConfig = '';
+            [string]$icingaCurrentConfig = '';
             if (Test-Path $this.getIcingaConfigFile()) {
                 $icingaCurrentConfig = [System.IO.File]::ReadAllText($this.getIcingaConfigFile());
             }
 
-            $icingaNewConfig =
+            [string]$icingaNewConfig =
 '/** Icinga 2 Config - proposed by Icinga Director */
 include "constants.conf"
 include <itl>
@@ -702,8 +701,8 @@ object ApiListener "api" {
             throw 'New Icinga 2 configuration not generated. Please call "generateIcingaConfiguration" before.';
         }
 
-        $oldConfigHash = $this.getHashFromString($this.getProperty('old_icinga_config'));
-        $newConfigHash = $this.getHashFromString($this.getProperty('new_icinga_config'));
+        [string]$oldConfigHash = $this.getHashFromString($this.getProperty('old_icinga_config'));
+        [string]$newConfigHash = $this.getHashFromString($this.getProperty('new_icinga_config'));
 
         $this.debug('Old Config Hash: "' + $oldConfigHash + '" New Hash: "' + $newConfigHash + '"');
 
@@ -719,10 +718,10 @@ object ApiListener "api" {
     #
     $installer | Add-Member -membertype ScriptMethod -name 'getHashFromString' -value {
         param([string]$text);
-        $algorithm = new-object System.Security.Cryptography.SHA1Managed;
+        [System.Object]$algorithm = New-Object System.Security.Cryptography.SHA1Managed;
         $hash = [System.Text.Encoding]::UTF8.GetBytes($text);
         $hashInBytes = $algorithm.ComputeHash($hash);
-        $result = '';
+        [string]$result = '';
         foreach($byte in $hashInBytes) {
              $result += $byte.ToString();
         }
@@ -785,13 +784,13 @@ object ApiListener "api" {
     $installer | Add-Member -membertype ScriptMethod -name 'generateCertificates' -value {
 
         if ($this.getProperty('local_hostname') -And $this.config('ca_server') -And $this.getProperty('icinga_ticket')) {
-            $icingaPkiDir = $this.getProperty('config_dir') + 'pki\';
-            $icingaBinary = $this.getInstallPath() + '\sbin\icinga2.exe';
-            $agentName = $this.getProperty('local_hostname');
+            [string]$icingaPkiDir = $this.getProperty('config_dir') + 'pki\';
+            [string]$icingaBinary = $this.getInstallPath() + '\sbin\icinga2.exe';
+            [string]$agentName = $this.getProperty('local_hostname');
 
             # Generate the certificate
             $this.info('Generating Icinga 2 certificates');
-            $result = &$icingaBinary @('pki', 'new-cert', '--cn', $this.getProperty('local_hostname'), '--key', ($icingaPkiDir + $agentName + '.key'), '--cert', ($icingaPkiDir + $agentName + '.crt'));
+            [string]$result = &$icingaBinary @('pki', 'new-cert', '--cn', $this.getProperty('local_hostname'), '--key', ($icingaPkiDir + $agentName + '.key'), '--cert', ($icingaPkiDir + $agentName + '.crt'));
             $this.printAndAssertResultBasedOnExitCode($result, $LASTEXITCODE);
 
             # Save Certificate
@@ -821,7 +820,7 @@ object ApiListener "api" {
     $installer | Add-Member -membertype ScriptMethod -name 'validateCertificate' -value {
         param([string] $certificate);
 
-        $certFingerprint = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2;
+        [System.Object]$certFingerprint = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2;
         $certFingerprint.Import($certificate);
         $this.info('Certificate fingerprint: ' + $certFingerprint.Thumbprint);
 
@@ -845,8 +844,8 @@ object ApiListener "api" {
     # Agent. If not, return FALSE
     #
     $installer | Add-Member -membertype ScriptMethod -name 'hasCertificates' -value {
-        $icingaPkiDir = $this.getProperty('config_dir') + 'pki\';
-        $agentName = $this.getProperty('local_hostname');
+        [string]$icingaPkiDir = $this.getProperty('config_dir') + 'pki\';
+        [string]$agentName = $this.getProperty('local_hostname');
         if (
             ((Test-Path ($icingaPkiDir + $agentName + '.key')) `
             -And (Test-Path ($icingaPkiDir + $agentName + '.crt')) `
@@ -1023,11 +1022,12 @@ object ApiListener "api" {
         if ($this.config('director_url') -And $this.config('director_host_json') -And $this.getProperty('local_hostname')) {
             try {
                  # Setup our web client to call the direcor
-                $webClient = $this.createWebClientInstance();
+                [System.Object]$webClient = $this.createWebClientInstance();
                 # Replace the host object placeholder with the hostname or the FQDN
-                $host_object_json = $this.config('director_host_json').Replace('&hostname_placeholder&', $this.getProperty('local_hostname'));
+                [string]$host_object_json = $this.config('director_host_json').Replace('&hostname_placeholder&', $this.getProperty('local_hostname'));
+                $host_object_json = $host_object_json.Replace('\u0026hostname_placeholder\u0026', $this.getProperty('local_hostname'));
                 # Create the host object inside the director
-                $result = $webClient.UploadString($this.config('director_url') + '/icingaweb2/director/host', 'PUT', "$host_object_json");
+                [string]$result = $webClient.UploadString($this.config('director_url') + '/icingaweb2/director/host', 'PUT', "$host_object_json");
                 $this.info('Placed query for creating host ' + $this.getProperty('local_hostname') + ' inside Icinga Director. Result: ' + $result);
 
                 # Shall we deploy the config for the generated host?
@@ -1050,9 +1050,9 @@ object ApiListener "api" {
     $installer | Add-Member -membertype ScriptMethod -name 'fetchTicketFromIcingaDirector' -value {
         if ($this.config('director_url') -And $this.getProperty('local_hostname')) {
             # Setup our web client to call the director
-            $webClient = $this.createWebClientInstance();        
+            [System.Object]$webClient = $this.createWebClientInstance();        
             # Try to fetch the ticket for the host
-            $ticket = $webClient.DownloadString($this.config('director_url') + '/icingaweb2/director/host/ticket?name=' + $this.getProperty('local_hostname'));
+            [string]$ticket = $webClient.DownloadString($this.config('director_url') + '/icingaweb2/director/host/ticket?name=' + $this.getProperty('local_hostname'));
             # Lookup all " inside the return string
             $quotes = Select-String -InputObject $ticket -Pattern '"' -AllMatches;
             
