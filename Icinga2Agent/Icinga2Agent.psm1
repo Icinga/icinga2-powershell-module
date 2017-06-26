@@ -37,6 +37,7 @@ function Icinga2AgentModule {
         [string]$DirectorDomain,
         [string]$DirectorAuthToken,
         [string]$DirectorHostObject,
+        [bool]$DirectorAutoConfig         = $FALSE,
         [bool]$DirectorDeployConfig       = $FALSE,
 
         # Uninstaller arguments
@@ -77,6 +78,7 @@ function Icinga2AgentModule {
         director_domain         = $DirectorDomain;
         director_auth_token     = $DirectorAuthToken;
         director_host_json      = $DirectorHostObject;
+        director_auto_config    = $DirectorAutoConfig;
         director_deploy_config  = $DirectorDeployConfig;
         full_uninstallation     = $FullUninstallation;
         debug_mode              = $DebugMode;
