@@ -337,6 +337,7 @@ function Icinga2AgentModule {
     # inside the module to achieve our requirements
     #
     $installer | Add-Member -membertype ScriptMethod -name 'createWebClientInstance' -value {
+        param([string]$header);
 
         [System.Object]$webClient = New-Object System.Net.WebClient;
         if ($this.config('director_user') -And $this.config('director_password')) {
@@ -346,7 +347,7 @@ function Icinga2AgentModule {
             }
             $webClient.Credentials = New-Object System.Net.NetworkCredential($this.config('director_user'), $this.config('director_password'), $domain);
         }
-        $webClient.Headers.add('accept','application/json');
+        $webClient.Headers.add('accept', $header);
 
         return $webClient;
     }
@@ -1044,7 +1045,7 @@ object ApiListener "api" {
         if ($this.config('director_url') -And $this.config('director_host_json') -And $this.getProperty('local_hostname')) {
             try {
                  # Setup our web client to call the direcor
-                [System.Object]$webClient = $this.createWebClientInstance();
+                [System.Object]$webClient = $this.createWebClientInstance('application/json');
                 # Replace the host object placeholder with the hostname or the FQDN
                 [string]$host_object_json = $this.config('director_host_json').Replace('&hostname_placeholder&', $this.getProperty('local_hostname'));
                 $host_object_json = $host_object_json.Replace('\u0026hostname_placeholder\u0026', $this.getProperty('local_hostname'));
@@ -1054,7 +1055,7 @@ object ApiListener "api" {
 
                 # Shall we deploy the config for the generated host?
                 if ($this.config('director_deploy_config')) {
-                    $webClient = $this.createWebClientInstance();
+                    $webClient = $this.createWebClientInstance('application/json');
                     $result = $webClient.DownloadString($this.config('director_url') + '/icingaweb2/director/config/deploy');
                     $this.info('Deploying configuration from Icinga Director to Icinga. Result: ' + $result);
                 }
@@ -1072,7 +1073,7 @@ object ApiListener "api" {
     $installer | Add-Member -membertype ScriptMethod -name 'fetchTicketFromIcingaDirector' -value {
         if ($this.config('director_url') -And $this.getProperty('local_hostname')) {
             # Setup our web client to call the director
-            [System.Object]$webClient = $this.createWebClientInstance();        
+            [System.Object]$webClient = $this.createWebClientInstance('application/json');
             # Try to fetch the ticket for the host
             [string]$ticket = $webClient.DownloadString($this.config('director_url') + '/icingaweb2/director/host/ticket?name=' + $this.getProperty('local_hostname'));
             # Lookup all " inside the return string
