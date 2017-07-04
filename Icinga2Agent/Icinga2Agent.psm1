@@ -1044,26 +1044,71 @@ object ApiListener "api" {
     # with a provided JSON string
     #
     $installer | Add-Member -membertype ScriptMethod -name 'createHostInsideIcingaDirector' -value {
-        if ($this.config('director_url') -And $this.config('director_host_json') -And $this.getProperty('local_hostname')) {
-            try {
-                 # Setup our web client to call the direcor
-                [System.Object]$webClient = $this.createWebClientInstance('application/json');
-                # Replace the host object placeholder with the hostname or the FQDN
-                [string]$host_object_json = $this.config('director_host_json').Replace('&hostname_placeholder&', $this.getProperty('local_hostname'));
-                $host_object_json = $host_object_json.Replace('\u0026hostname_placeholder\u0026', $this.getProperty('local_hostname'));
-                # Create the host object inside the director
-                [string]$result = $webClient.UploadString($this.config('director_url') + '/icingaweb2/director/host', 'PUT', "$host_object_json");
-                $this.info('Placed query for creating host ' + $this.getProperty('local_hostname') + ' inside Icinga Director. Result: ' + $result);
 
-                # Shall we deploy the config for the generated host?
-                if ($this.config('director_deploy_config')) {
-                    $webClient = $this.createWebClientInstance('application/json');
-                    $result = $webClient.DownloadString($this.config('director_url') + '/icingaweb2/director/config/deploy');
-                    $this.info('Deploying configuration from Icinga Director to Icinga. Result: ' + $result);
+        if ($this.config('director_url') -And $this.getProperty('local_hostname')) {
+            try {
+                # Setup our web client to call the direcor
+                [System.Object]$webClient = $this.createWebClientInstance('application/json')
+
+                if ($this.config('director_auth_token')) {
+                    [string]$apiKey = $this.config('director_auth_token');
+                    [string]$json = '';
+                    # If no JSON Object is defined (should be default), we shall create one
+                    if (-Not $this.config('director_host_json')) {
+                        [string]$hostname = $this.getProperty('local_hostname');
+                        $json = '{ "object_name":"$hostname", "address":"$hostname", "display_name":"$hostname" }';
+                    } else {
+                        # Otherwise use the specified one
+                        $json = $this.config('director_host_json');
+                    }
+                    $this.info('Creating host ' + $this.getProperty('local_hostname') + ' over API token inside Icinga Director.');
+                    [string]$result = $webClient.UploadString($this.config('director_url') + '/icingaweb2/director/host?apiHostKey=' + $apiKey, 'PUT', "$json");
+                    $this.writeHostAPIKeyToDisk($result);
+                    $this.setProperty('director_host_token', $result);
+                } elseif ($this.config('director_host_json'))  {
+                    # Replace the host object placeholder with the hostname or the FQDN
+                    [string]$host_object_json = $this.config('director_host_json').Replace('&hostname_placeholder&', $this.getProperty('local_hostname'));
+                    $host_object_json = $host_object_json.Replace('\u0026hostname_placeholder\u0026', $this.getProperty('local_hostname'));
+                    # Create the host object inside the director
+                    [string]$result = $webClient.UploadString($this.config('director_url') + '/icingaweb2/director/host', 'PUT', "$host_object_json");
+                    $this.info('Placed query for creating host ' + $this.getProperty('local_hostname') + ' inside Icinga Director. Result: ' + $result);
+
+                    # Shall we deploy the config for the generated host?
+                    if ($this.config('director_deploy_config')) {
+                        $webClient = $this.createWebClientInstance('application/json');
+                        $result = $webClient.DownloadString($this.config('director_url') + '/icingaweb2/director/config/deploy');
+                        $this.info('Deploying configuration from Icinga Director to Icinga. Result: ' + $result);
+                    }
                 }
             } catch {
                 $this.error('Failed to create host inside Icinga Director. Possibly the host already exists. Error: ' + $_.Exception.Message);
             }
+        }
+    }
+
+    #
+    # Write Host API-Key for future usage
+    #
+    $installer | Add-Member -membertype ScriptMethod -name 'writeHostAPIKeyToDisk' -value {
+        param([string]$apiKey);
+
+        [string]$apiFile = $this.getProperty('config_dir') + 'icingadirector.token';
+        $this.info('Writing host API-Key "' + $apiKey + '" to "' + $apiFile + '"');
+        [System.IO.File]::WriteAllText($apiFile, $apiKey);
+    }
+
+    #
+    # Read Host API-Key from disk for usage
+    #
+    $installer | Add-Member -membertype ScriptMethod -name 'readHostAPIKeyFromDisk' -value {
+        [string]$apiFile = $this.getProperty('config_dir') + 'icingadirector.token';
+        if (Test-Path ($apiFile)) {
+            [string]$hostToken = [System.IO.File]::ReadAllText($apiFile);
+            $this.setProperty('director_host_token', $hostToken);
+            $this.info('Reading host api token ' + $hostToken + ' from ' + $apiFile);
+        } else {
+            $this.warn('Failed to read host API token from "' + $apiFile + '". File not found.');
+            $this.setProperty('director_host_token', '');
         }
     }
 
