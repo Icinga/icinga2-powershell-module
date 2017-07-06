@@ -40,6 +40,14 @@ function Icinga2AgentModule {
         [bool]$DirectorAutoConfig         = $FALSE,
         [bool]$DirectorDeployConfig       = $FALSE,
 
+        # NSClient Installer
+        [bool]$InstallNSClient            = $FALSE,
+        [bool]$NSClientAddDefaults        = $FALSE,
+        [bool]$NSClientEnableFirewall     = $FALSE,
+        [bool]$NSClientEnableService      = $FALSE,
+        [string]$NSClientDirectory,
+        [string]$NSClientInstallerPath,
+
         # Uninstaller arguments
         [bool]$FullUninstallation         = $FALSE,
 
@@ -80,6 +88,12 @@ function Icinga2AgentModule {
         director_host_json      = $DirectorHostObject;
         director_auto_config    = $DirectorAutoConfig;
         director_deploy_config  = $DirectorDeployConfig;
+        install_nsclient        = $InstallNSClient;
+        nsclient_add_defaults   = $NSClientAddDefaults;
+        nsclient_firewall       = $NSClientEnableFirewall;
+        nsclient_service        = $NSClientEnableService;
+        nsclient_directory      = $NSClientDirectory;
+        nsclient_installer_path = $NSClientInstallerPath;
         full_uninstallation     = $FullUninstallation;
         debug_mode              = $DebugMode;
     }
@@ -105,6 +119,18 @@ function Icinga2AgentModule {
             return 'true';
         }
         return 'false';
+    }
+
+    #
+    # Convert a boolean value $TRUE $FALSE
+    # to a int value
+    #
+    $installer | Add-Member -membertype ScriptMethod -name 'convertBoolToInt' -value {
+        param([bool]$key);
+        if ($key) {
+            return 1;
+        }
+        return 0;
     }
 
     #
@@ -1139,6 +1165,153 @@ object ApiListener "api" {
     }
 
     #
+    # Shall we install the NSClient as well on the system?
+    # All possible actions are handeled here
+    #
+    $installer | Add-Member -membertype ScriptMethod -name 'installNSClient' -value {
+
+        if ($this.config('install_nsclient')) {
+
+            [string]$installerPath = $this.getNSClientInstallerPath();
+            $this.info('Trying to install NSClient++ from ' + $installerPath);
+
+            # First check if the package does exist
+            if (Test-Path ($installerPath)) {
+
+                # Get all required arguments for installing the NSClient unattended
+                [string]$NSClientArguments = $this.getNSClientInstallerArguments();
+
+                # Start the installer process
+                Start-Process $installerPath -ArgumentList $NSClientArguments -wait;
+
+                # Exist Code 0 means the NSClient was installed successfully
+                # Otherwise we require to throw an error
+                if ($LASTEXITCODE -eq 0) {
+                    $this.info('NSClient++ successfully installed');
+                } else {
+                    $this.error('Failed to install NSClient++')
+                }
+
+                # If defined remove the Firewall Rule to secure the system
+                # By default the NSClient is only called from the Icinga 2 Agent locally
+                $this.removeNSClientFirewallRule();
+                # Remove the service if we only call the NSClient locally
+                $this.removeNSClientService();
+                # Add the default NSClient config if we want to do more
+                $this.addNSClientDefaultConfig();
+                # To tell Icinga 2 we installed the NSClient and to make
+                # the NSCPPath variable available, we require to restart Icinga 2
+                $this.setProperty('require_restart', 'true');
+            } else {
+                $this.error('Failed to locate NSClient++ Installer at ' + $installerPath);
+            }
+        } else {
+            $this.info('NSClient++ will not be installed on the system.');
+        }
+    }
+
+    #
+    # Determine the location of the NSClient installer
+    # By default we are using the shipped NSClient from the Icinga 2 Agent
+    #
+    $installer | Add-Member -membertype ScriptMethod -name 'getNSClientInstallerPath' -value {
+
+        if ($this.config('nsclient_installer_path') -ne '') {
+
+            # Check of the installer is a local path
+            # If so, use this as installer source
+            if (Test-Path ($this.config('nsclient_installer_path'))) {
+                return $this.config('nsclient_installer_path');
+            }
+
+            $this.info('Trying to download NSClient++ from ' + $this.config('nsclient_installer_path'));
+            [System.Object]$client = New-Object System.Net.WebClient;
+            $client.DownloadFile($this.config('nsclient_installer_path'), $Env:temp + '\NSCP.msi');
+
+            return $Env:temp + '\NSCP.msi';
+        } else {
+            # Icinga is shipping a NSClient Version after installation
+            # Install this version if defined
+            return $this.getInstallPath() + '\sbin\NSCP.msi';
+        }
+
+        return '';
+    }
+
+    #
+    # If we only want to use the NSClient++ to be called from the Icinga 2 Agent
+    # we do not require an open Firewall Rule to allow traffic.
+    #
+    $installer | Add-Member -membertype ScriptMethod -name 'getNSClientInstallerArguments' -value {
+        [string]$NSClientArguments = '';
+        $NSClientArguments += '/quiet';
+        $NSClientArguments += ' INSTALLLOCATION=' + $this.config('nsclient_directory');
+
+        return $NSClientArguments;
+    }
+
+    #
+    # If we only want to use the NSClient++ to be called from the Icinga 2 Agent
+    # we do not require an open Firewall Rule to allow traffic.
+    #
+    $installer | Add-Member -membertype ScriptMethod -name 'removeNSClientFirewallRule' -value {
+        if ($this.config('nsclient_firewall') -eq $FALSE) {
+            $this.info('Removing NSClient++ Firewall Rule...');
+            $firewallRule = &netsh @('advfirewall', 'firewall', 'delete', 'rule', 'name=', 'NSClient++ Monitoring Agent');
+            $this.info($firewallRule);
+            $firewallRule = &netsh @('advfirewall', 'firewall', 'show', 'rule', 'name=', 'NSClient++ Monitoring Agent');
+            if ($firewallRule -eq '') {
+                $this.info('NSClient++ Firewall Rule successfully removed');
+            } else {
+                $this.error('Failed to remove NSClient++ Firewall Rule.')
+            }
+        }
+    }
+
+    #
+    # If we only want to use the NSClient++ to be called from the Icinga 2 Agent
+    # we do not require a running NSClient++ Service
+    #
+    $installer | Add-Member -membertype ScriptMethod -name 'removeNSClientService' -value {
+        if ($this.config('nsclient_service') -eq $FALSE) {
+            $NSClientService = Get-WmiObject -Class Win32_Service -Filter "Name='nscp'";
+            if ($NSClientService -ne $null) {
+                $this.info('Trying to remove NSClient++ service...');
+                # Before we remove the service, stop it (to prevent ghosts)
+                Stop-Service 'nscp';
+                # Now remove it
+                $result = $NSClientService.delete();
+                if ($result.ReturnValue -eq 0) {
+                    $this.info('NSClient++ Service has been removed');
+                } else {
+                    $this.error('Failed to remove NSClient++ service');
+                }
+            } else {
+                $this.info('NSClient++ Service is not installed')
+            }
+        }
+    }
+
+    #
+    # In case we want to do more with the NSClient, we can auto-generate
+    # all NSClient++ config attributes
+    #
+    $installer | Add-Member -membertype ScriptMethod -name 'addNSClientDefaultConfig' -value {
+        if ($this.config('nsclient_add_defaults')) {
+            [string]$NSClientBinary = $this.config('nsclient_directory') + '\nscp.exe';
+            if (Test-Path ($NSClientBinary)) {
+                $this.info('Generating all default NSClient++ config values');
+                $result = &$NSClientBinary @('settings', '--generate', '--add-defaults', '--load-all');
+                if ($result -ne '') {
+                    $this.printAndAssertResultBasedOnExitCode($result, $LASTEXITCODE);
+                }
+            } else {
+                $this.error('Failed to generate NSClient++ defaults config. Path to executable is not valid: ' + $NSClientBinary);
+            }
+        }
+    }
+
+    #
     # This function will try to load all
     # data from the system and setup the
     # entire Agent without user interaction
@@ -1193,6 +1366,8 @@ object ApiListener "api" {
             if ($this.shouldFlushIcingaApiDirectory()) {
                 $this.flushIcingaApiDirectory();
             }
+
+            $this.installNSClient();
 
             if ($this.madeChanges()) {
                 $this.restartAgent();
