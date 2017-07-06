@@ -1312,13 +1312,21 @@ object ApiListener "api" {
     }
 
     #
+    # Deprecated function
+    #
+    $installer | Add-Member -membertype ScriptMethod -name 'installIcinga2Agent' -value {
+        $this.warn('The function "installIcinga2Agent" is deprecated and will be removed soon. Please use "installMonitoringComponents" instead.')
+        return $this.installMonitoringComponents();
+    }
+
+    #
     # This function will try to load all
     # data from the system and setup the
     # entire Agent without user interaction
     # including download and update if
     # specified. Returnd 0 or 1 as exit code
     #
-    $installer | Add-Member -membertype ScriptMethod -name 'installIcinga2Agent' -value {
+    $installer | Add-Member -membertype ScriptMethod -name 'installMonitoringComponents' -value {
         try {
             if (-Not $this.isAdmin()) {
                 return 1;
