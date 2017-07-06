@@ -65,8 +65,8 @@ function Icinga2AgentModule {
         agent_name              = $AgentName;
         ticket                  = $Ticket;
         agent_version           = $InstallAgentVersion;
-        get_agent_name          = $FetchAgentName;
-        get_agent_fqdn          = $FetchAgentFQDN;
+        fetch_agent_name        = $FetchAgentName;
+        fetch_agent_fqdn        = $FetchAgentFQDN;
         transform_hostname      = $TransformHostname;
         parent_zone             = $ParentZone;
         accept_config           = $AcceptConfig;
@@ -107,6 +107,15 @@ function Icinga2AgentModule {
     $installer | Add-Member -membertype ScriptMethod -name 'config' -value {
         param([string] $key);
         return $this.cfg[$key];
+    }
+
+    #
+    # Override the given arguments of the PowerShell script with
+    # custom values or edited values
+    #
+    $installer | Add-Member -membertype ScriptMethod -name 'overrideConfig' -value {
+        param([string] $key, [string]$value);
+        $this.cfg[$key] = $value;
     }
 
     #
@@ -365,7 +374,7 @@ function Icinga2AgentModule {
     # inside the module to achieve our requirements
     #
     $installer | Add-Member -membertype ScriptMethod -name 'createWebClientInstance' -value {
-        param([string]$header);
+        param([string]$header, [bool]$directorHeader = $FALSE);
 
         [System.Object]$webClient = New-Object System.Net.WebClient;
         if ($this.config('director_user') -And $this.config('director_password')) {
@@ -376,8 +385,74 @@ function Icinga2AgentModule {
             $webClient.Credentials = New-Object System.Net.NetworkCredential($this.config('director_user'), $this.config('director_password'), $domain);
         }
         $webClient.Headers.add('accept', $header);
+        if ($directorHeader) {
+            $webClient.Headers.add('X-Director-Accept', 'text/plain');
+        }
 
         return $webClient;
+    }
+
+    #
+    # Handle HTTP Requests properly to receive proper status codes in return
+    #
+    $installer | Add-Member -membertype ScriptMethod -name 'createHTTPRequest' -value {
+        param([string]$url, [string]$body, [string]$method, [string]$header, [bool]$directorHeader, [bool]$printExceptionMessage);
+
+        $httpRequest = [System.Net.HttpWebRequest]::Create($url);
+        $httpRequest.Method = $method;
+        $httpRequest.Accept = $header;
+        $httpRequest.ContentType = 'application/json; charset=utf-8';
+        if ($directorHeader) {
+            $httpRequest.Headers.Add('X-Director-Accept: text/plain');
+        }
+        $httpRequest.TimeOut = 6000;
+
+        if ($this.config('director_user') -And $this.config('director_password')) {
+            [string]$credentials = [System.Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($this.config('director_user') + ':' + $this.config('director_password')));
+            $httpRequest.Headers.add('Authorization: Basic ' + $credentials);
+        }
+
+        # Only send data in case we want to send some data
+        if ($body -ne '') {
+            $transmitBytes = [System.Text.Encoding]::UTF8.GetBytes($body);
+            $httpRequest.ContentLength = $transmitBytes.Length;
+            [System.IO.Stream]$httpOutput = [System.IO.Stream]$httpRequest.GetRequestStream()
+            $httpOutput.Write($transmitBytes, 0, $transmitBytes.Length)
+            $httpOutput.Close()
+        }
+
+        try {
+            $httpResponse = $httpRequest.GetResponse();
+            $responseStream = $httpResponse.getResponseStream();
+            $streamReader = New-Object IO.StreamReader($responseStream);
+            $httpResult = $streamReader.ReadToEnd();
+            $httpResponse.close()
+            $streamReader.close()
+
+            return $httpResult;
+        } catch [System.Net.WebException] {
+            if ($printExceptionMessage) {
+                $this.error($_.Exception.Message);
+            }
+            $exceptionMessage = $_.Exception.Response;
+            $httpErrorCode = [int][system.net.httpstatuscode]$exceptionMessage.StatusCode;
+            return $httpErrorCode;
+        }
+
+        return '';
+    }
+
+    #
+    # Check if the provided result is an HTTP Response code
+    #
+    $installer | Add-Member -membertype ScriptMethod -name 'isHTTPResponseCode' -value {
+        param([string]$httpResult);
+
+        if ($httpResult.length -eq 3) {
+            return $TRUE;
+        }
+
+        return $FALSE;
     }
 
     #
@@ -1031,11 +1106,11 @@ object ApiListener "api" {
     # easier
     #
     $installer | Add-Member -membertype ScriptMethod -name 'fetchHostnameOrFQDN' -value {
-        if ($this.config('get_agent_fqdn') -And (Get-WmiObject win32_computersystem).Domain) {
+        if (($this.config('fetch_agent_fqdn') -Or $this.config('director_auth_token')) -And (Get-WmiObject win32_computersystem).Domain) {
             [string]$hostname = (Get-WmiObject win32_computersystem).DNSHostName + '.' + (Get-WmiObject win32_computersystem).Domain;
             $this.setProperty('local_hostname', $hostname);
             $this.info('Setting internal Agent Name to ' + $this.getProperty('local_hostname'));
-        } elseif ($this.config('get_agent_name')) {
+        } elseif ($this.config('fetch_agent_name')) {
             [string]$hostname = (Get-WmiObject win32_computersystem).DNSHostName;
             $this.setProperty('local_hostname', $hostname);
             $this.info('Setting internal Agent Name to ' + $this.getProperty('local_hostname'));
@@ -1072,42 +1147,61 @@ object ApiListener "api" {
     $installer | Add-Member -membertype ScriptMethod -name 'createHostInsideIcingaDirector' -value {
 
         if ($this.config('director_url') -And $this.getProperty('local_hostname')) {
-            try {
-                # Setup our web client to call the direcor
-                [System.Object]$webClient = $this.createWebClientInstance('application/json')
+            if ($this.config('director_auth_token')) {
+                if ($this.requireIcingaDirectorAPIVersion('1.4.0', '[Function::createHostInsideIcingaDirector]')) {
+                    if ($this.getProperty('director_host_token') -eq '') {
+                        [string]$apiKey = $this.config('director_auth_token');
+                        [string]$url = $this.config('director_url') + '/icingaweb2/director/self-service/register-host?name=' + $this.getProperty('local_hostname') + '&key=' + $apiKey;
+                        [string]$json = '';
+                        # If no JSON Object is defined (should be default), we shall create one
+                        if (-Not $this.config('director_host_json')) {
+                            [string]$hostname = $this.getProperty('local_hostname');
+                            $json = '{ "address": "' + $hostname + '", "display_name": "' + $hostname + '" }';
+                        } else {
+                            # Otherwise use the specified one
+                            $json = $this.config('director_host_json');
+                        }
 
-                if ($this.config('director_auth_token')) {
-                    [string]$apiKey = $this.config('director_auth_token');
-                    [string]$json = '';
-                    # If no JSON Object is defined (should be default), we shall create one
-                    if (-Not $this.config('director_host_json')) {
-                        [string]$hostname = $this.getProperty('local_hostname');
-                        $json = '{ "object_name":"$hostname", "address":"$hostname", "display_name":"$hostname" }';
-                    } else {
-                        # Otherwise use the specified one
-                        $json = $this.config('director_host_json');
-                    }
-                    $this.info('Creating host ' + $this.getProperty('local_hostname') + ' over API token inside Icinga Director.');
-                    [string]$result = $webClient.UploadString($this.config('director_url') + '/icingaweb2/director/host?apiHostKey=' + $apiKey, 'PUT', "$json");
-                    $this.writeHostAPIKeyToDisk($result);
-                    $this.setProperty('director_host_token', $result);
-                } elseif ($this.config('director_host_json'))  {
-                    # Replace the host object placeholder with the hostname or the FQDN
-                    [string]$host_object_json = $this.config('director_host_json').Replace('&hostname_placeholder&', $this.getProperty('local_hostname'));
-                    $host_object_json = $host_object_json.Replace('\u0026hostname_placeholder\u0026', $this.getProperty('local_hostname'));
-                    # Create the host object inside the director
-                    [string]$result = $webClient.UploadString($this.config('director_url') + '/icingaweb2/director/host', 'PUT', "$host_object_json");
-                    $this.info('Placed query for creating host ' + $this.getProperty('local_hostname') + ' inside Icinga Director. Result: ' + $result);
+                        $this.info('Creating host ' + $this.getProperty('local_hostname') + ' over API token inside Icinga Director.');
 
-                    # Shall we deploy the config for the generated host?
-                    if ($this.config('director_deploy_config')) {
-                        $webClient = $this.createWebClientInstance('application/json');
-                        $result = $webClient.DownloadString($this.config('director_url') + '/icingaweb2/director/config/deploy');
-                        $this.info('Deploying configuration from Icinga Director to Icinga. Result: ' + $result);
+                        [string]$httpResponse = $this.createHTTPRequest($url, $json, 'POST', 'application/json', $TRUE, $FALSE);
+
+                        if ($this.isHTTPResponseCode($httpResponse) -eq $FALSE) {
+                            $this.setProperty('director_host_token', $httpResponse);
+                            $this.writeHostAPIKeyToDisk();
+                        } else {
+                            if ($httpResponse -eq '400') {
+                                $this.warn('Received response 400 from Icinga Director. Possibly you tried to re-create the host ' + $this.getProperty('local_hostname'));
+                            } else {
+                                $this.warn('Failed to create host. Response code ' + $httpResponse);
+                            }
+                        }
                     }
                 }
-            } catch {
-                $this.error('Failed to create host inside Icinga Director. Possibly the host already exists. Error: ' + $_.Exception.Message);
+            } elseif ($this.config('director_host_json'))  {
+                # Setup the url we need to call
+                [string]$url = $this.config('director_url') + '/icingaweb2/director/host';
+                # Replace the host object placeholder with the hostname or the FQDN
+                [string]$host_object_json = $this.config('director_host_json').Replace('&hostname_placeholder&', $this.getProperty('local_hostname'));
+                $host_object_json = $host_object_json.Replace('\u0026hostname_placeholder\u0026', $this.getProperty('local_hostname'));
+                # Create the host object inside the director
+                [string]$httpResponse = $this.createHTTPRequest($url, $host_object_json, 'PUT', 'application/json', $FALSE, $FALSE);
+
+                if ($this.isHTTPResponseCode($httpResponse) -eq $FALSE) {
+                    $this.info('Placed query for creating host ' + $this.getProperty('local_hostname') + ' inside Icinga Director. Config: ' + $httpResponse);
+                } else {
+                    if ($httpResponse -eq '422') {
+                        $this.warn('Failed to create host ' + $this.getProperty('local_hostname') + ' inside Icinga Director. The host seems to already exist.');
+                    } else {
+                        $this.error('Failed to create host ' + $this.getProperty('local_hostname') + ' inside Icinga Director. Error response ' + $httpResponse);
+                    }
+                }
+                # Shall we deploy the config for the generated host?
+                if ($this.config('director_deploy_config')) {
+                    $url = $this.config('director_url') + '/icingaweb2/director/config/deploy';
+                    [string]$httpResponse = $this.createHTTPRequest($url, '', 'POST', 'application/json', $FALSE, $TRUE);
+                    $this.info('Deploying configuration from Icinga Director to Icinga. Result: ' + $httpResponse);
+                }
             }
         }
     }
@@ -1116,11 +1210,11 @@ object ApiListener "api" {
     # Write Host API-Key for future usage
     #
     $installer | Add-Member -membertype ScriptMethod -name 'writeHostAPIKeyToDisk' -value {
-        param([string]$apiKey);
-
-        [string]$apiFile = $this.getProperty('config_dir') + 'icingadirector.token';
-        $this.info('Writing host API-Key "' + $apiKey + '" to "' + $apiFile + '"');
-        [System.IO.File]::WriteAllText($apiFile, $apiKey);
+        if (Test-Path ($this.getProperty('config_dir'))) {
+            [string]$apiFile = $this.getProperty('config_dir') + 'icingadirector.token';
+            $this.info('Writing host API-Key "' + $this.getProperty('director_host_token') + '" to "' + $apiFile + '"');
+            [System.IO.File]::WriteAllText($apiFile, $this.getProperty('director_host_token'));
+        }
     }
 
     #
@@ -1133,8 +1227,111 @@ object ApiListener "api" {
             $this.setProperty('director_host_token', $hostToken);
             $this.info('Reading host api token ' + $hostToken + ' from ' + $apiFile);
         } else {
-            $this.warn('Failed to read host API token from "' + $apiFile + '". File not found.');
             $this.setProperty('director_host_token', '');
+        }
+    }
+
+    #
+    # Get the API Version from the Icinga Director. In case we are using
+    # an older Version of the Director, we wont get this version
+    #
+    $installer | Add-Member -membertype ScriptMethod -name 'getIcingaDirectorVersion' -value {
+        if ($this.config('director_url')) {
+            # Do a legacy call to the Icinga Director and get a JSON-Value
+            # Older versions of the Director do not support plain/text and
+            # would result in making this request quite useless
+
+            [string]$url = $this.config('director_url') + '/icingaweb2/director/self-service/api-version';
+            [string]$versionString = $this.createHTTPRequest($url, '', 'POST', 'application/json', $FALSE, $FALSE);
+
+            if ($this.isHTTPResponseCode($versionString) -eq $FALSE) {
+                # Remove all characters we do not need inside the string
+                [string]$versionString = $versionString.Replace('"', '').Replace("`r", '').Replace("`n", '');
+                [array]$version = $versionString.Split('.');
+                $this.setProperty('icinga_director_api_version', $versionString);
+            } else {
+                $this.warn('You seem to use an older Version of the Icinga Director, as no API version could be retreived.');
+                $this.setProperty('icinga_director_api_version', '0.0.0');
+            }
+        }
+    }
+
+    #
+    # Match the Icinga Director API Version against a provided string
+    #
+    $installer | Add-Member -membertype ScriptMethod -name 'requireIcingaDirectorAPIVersion' -value {
+        param([string]$version, [string]$functionName);
+
+        if ($this.getProperty('icinga_director_api_version') -eq '0.0.0') {
+            return $FALSE;
+        }
+
+        [bool]$versionValid = $TRUE;
+        [array]$requiredVersion = $version.Split('.');
+        $currentVersion = $this.getProperty('icinga_director_api_version');
+
+        if ($requiredVersion[0] -gt $currentVersion[0]) {
+            $versionValid = $FALSE;
+        }
+
+        if ($requiredVersion[1] -gt $currentVersion[2]) {
+            $versionValid = $FALSE;
+        }
+
+        if ($requiredVersion[1] -ge $currentVersion[2] -And $requiredVersion[2] -gt $currentVersion[4]) {
+            $versionValid = $FALSE;
+        }
+
+        if ($versionValid -eq $FALSE) {
+            $this.error('The feature ' + $functionName + ' requires Icinga Director API-Version ' + $version + '. Got version ' + $currentVersion[0] + '.' + $currentVersion[2] + '.' + $currentVersion[4]);
+            return $FALSE;
+        }
+
+        return $TRUE;
+    }
+
+    #
+    # This function will fetch all arguments configured inside the Icinga Director
+    # to allow an entire auto configuration of the Icinga 2 Agent
+    #
+    $installer | Add-Member -membertype ScriptMethod -name 'fetchArgumentsFromIcingaDirector' -value {
+        if ($this.getProperty('director_host_token')) {
+            if ($this.requireIcingaDirectorAPIVersion('1.4.0', '[Function::fetchArgumentsFromIcingaDirector]')) {
+                [string]$url = $this.config('director_url') + '/icingaweb2/director/self-service/powershell-parameters?key=' + $this.getProperty('director_host_token');
+                [string]$argumentString = $this.createHTTPRequest($url, '', 'POST', 'application/json', $TRUE, $FALSE);
+
+                if ($this.isHTTPResponseCode($argumentString) -eq $FALSE) {
+                    # First split the entire result based in new-lines into an array
+                    [array]$arguments = $argumentString.Split("`n");
+                    $config = @{};
+
+                    # Now loop all elements and construct a dictionary for all values
+                    foreach ($item in $arguments) {
+                        if ($item.Contains(':')) {
+                            [int]$argumentPos = $item.IndexOf(":");
+                            [string]$argument = $item.Substring(0, $argumentPos)
+                            [string]$value = $item.Substring($argumentPos + 2, $item.Length - 2 - $argumentPos);
+                            $value = $value.Replace("`r", '');
+                            $value = $value.Replace("`n", '');
+
+                            if ($value.Contains( ',')) {
+                                [array]$valueArray = $value.Split(',');
+                                $this.overrideConfig($argument, $valueArray);
+                            } else {
+                                if ($value -eq 'true') {
+                                    $this.overrideConfig($argument, $TRUE);
+                                } elseif ($value -eq 'false') {
+                                    $this.overrideConfig($argument, $FALSE);
+                                } else {
+                                    $this.overrideConfig($argument, $value);
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    $this.error('Received ' + $argumentString + ' from Icinga Director. Possibly your API token is no longer valid or the object does not exist.');
+                }
+            }
         }
     }
 
@@ -1144,22 +1341,38 @@ object ApiListener "api" {
     # some of the possible required informations
     #
     $installer | Add-Member -membertype ScriptMethod -name 'fetchTicketFromIcingaDirector' -value {
-        if ($this.config('director_url') -And $this.getProperty('local_hostname')) {
-            # Setup our web client to call the director
-            [System.Object]$webClient = $this.createWebClientInstance('application/json');
-            # Try to fetch the ticket for the host
-            [string]$ticket = $webClient.DownloadString($this.config('director_url') + '/icingaweb2/director/host/ticket?name=' + $this.getProperty('local_hostname'));
-            # Lookup all " inside the return string
-            $quotes = Select-String -InputObject $ticket -Pattern '"' -AllMatches;
-            
-            # If we only got two ", we should have received a valid ticket
-            # Otherwise we need to throw an error
-            if ($quotes.Matches.Count -ne 2) {
-                throw 'Failed to fetch ticket for host ' + $this.getProperty('local_hostname') +'. Got ' + $ticket + ' as ticket.';
-            } else {
-                $ticket = $ticket.subString(1, $ticket.length - 3);
-                $this.info('Fetched ticket ' + $ticket + ' for host ' + $this.getProperty('local_hostname') + '.');
-                $this.setProperty('icinga_ticket', $ticket);
+
+        if ($this.getProperty('director_host_token')) {
+            if ($this.requireIcingaDirectorAPIVersion('1.4.0', '[Function::fetchTicketFromIcingaDirector]')) {
+                [string]$url = $this.config('director_url') + '/icingaweb2/director/self-service/ticket?key=' + $this.getProperty('director_host_token');
+                [string]$httpResponse = $this.createHTTPRequest($url, '', 'POST', 'application/json', $TRUE, $FALSE);
+                if ($this.isHTTPResponseCode($httpResponse) -eq $FALSE) {
+                    $this.setProperty('icinga_ticket', $httpResponse);
+                } else {
+                    $this.error('Failed to fetch Ticket from Icinga Director. Error response ' + $httpResponse);
+                }
+            }
+        } else {
+            if ($this.config('director_url') -And $this.getProperty('local_hostname')) {
+                [string]$url = $this.config('director_url') + '/icingaweb2/director/host/ticket?name=' + $this.getProperty('local_hostname');
+                [string]$httpResponse = $this.createHTTPRequest($url, '', 'POST', 'application/json', $FALSE, $FALSE);
+
+                if ($this.isHTTPResponseCode($httpResponse) -eq $FALSE) {
+                    # Lookup all " inside the return string
+                    $quotes = Select-String -InputObject $httpResponse -Pattern '"' -AllMatches;
+
+                    # If we only got two ", we should have received a valid ticket
+                    # Otherwise we need to throw an error
+                    if ($quotes.Matches.Count -ne 2) {
+                        throw 'Failed to fetch ticket for host ' + $this.getProperty('local_hostname') +'. Got ' + $httpResponse + ' as ticket.';
+                    } else {
+                        $httpResponse = $httpResponse.subString(1, $httpResponse.length - 3);
+                        $this.info('Fetched ticket ' + $httpResponse + ' for host ' + $this.getProperty('local_hostname') + '.');
+                        $this.setProperty('icinga_ticket', $httpResponse);
+                    }
+                } else {
+                    $this.error('Failed to fetch Ticket from Icinga Director. Error response ' + $httpResponse);
+                }
             }
         }
     }
@@ -1245,7 +1458,10 @@ object ApiListener "api" {
     $installer | Add-Member -membertype ScriptMethod -name 'getNSClientInstallerArguments' -value {
         [string]$NSClientArguments = '';
         $NSClientArguments += '/quiet';
-        $NSClientArguments += ' INSTALLLOCATION=' + $this.config('nsclient_directory');
+
+        if ($this.config('nsclient_directory')) {
+            $NSClientArguments += ' INSTALLLOCATION=' + $this.config('nsclient_directory');
+        }
 
         return $NSClientArguments;
     }
@@ -1332,12 +1548,18 @@ object ApiListener "api" {
                 return 1;
             }
 
+            # Get the current API-Version from the Icinga Director
+            $this.getIcingaDirectorVersion();
+            # Read the Host-API Key in case it exists
+            $this.readHostAPIKeyFromDisk();
             # Get host name or FQDN if required
             $this.fetchHostnameOrFQDN();
             # Transform the hostname if required
             $this.doTransformHostname();
             # Try to create a host object inside the Icinga Director
             $this.createHostInsideIcingaDirector();
+            # Read arguments for auto config from the Icinga Director
+            $this.fetchArgumentsFromIcingaDirector();
             # First check if we should get some parameters from the Icinga Director
             $this.fetchTicketFromIcingaDirector();
 
@@ -1357,6 +1579,8 @@ object ApiListener "api" {
                 if ($this.canInstallAgent()) {
                     $this.installAgent();
                     $this.cleanupAgentInstaller();
+                    # In case we have an API key assigned, write it to disk
+                    $this.writeHostAPIKeyToDisk();
                 } else {
                     throw 'Icinga 2 Agent is not installed and not allowed of beeing installed. Nothing to do.';
                 }
