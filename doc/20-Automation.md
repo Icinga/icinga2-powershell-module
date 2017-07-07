@@ -30,7 +30,7 @@ for each kind with an own API key.
 
 Configure the Self Service API over Icinga Director -> Icinga Infrastructure -> Self Service API
 
-![Host Agent Template](screenshots/20-automation/self-service-api.png)
+![Self Service API](screenshots/20-automation/self-service-api.png)
 
 Here you can globally configure how the name of the Windows machine will be fetched and processed, 
 if you with to install the Icinga 2 including the Version and if the NSClient should be installed.
