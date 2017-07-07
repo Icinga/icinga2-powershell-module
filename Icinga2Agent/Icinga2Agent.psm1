@@ -1281,6 +1281,7 @@ object ApiListener "api" {
         param([string]$version, [string]$functionName);
 
         if ($this.getProperty('icinga_director_api_version') -eq '0.0.0') {
+            $this.error('The feature ' + $functionName + ' requires Icinga Director API-Version ' + $version + '. Your Icinga Director version does not support the API.');
             return $FALSE;
         }
 
