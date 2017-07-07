@@ -1397,11 +1397,11 @@ object ApiListener "api" {
                 [string]$NSClientArguments = $this.getNSClientInstallerArguments();
 
                 # Start the installer process
-                Start-Process $installerPath -ArgumentList $NSClientArguments -wait;
+                $p = Start-Process $installerPath -ArgumentList $NSClientArguments -wait -PassThru;
 
                 # Exist Code 0 means the NSClient was installed successfully
                 # Otherwise we require to throw an error
-                if ($LASTEXITCODE -eq 0) {
+                if ($p.ExitCode -eq 0) {
                     $this.info('NSClient++ successfully installed');
                 } else {
                     $this.error('Failed to install NSClient++');
