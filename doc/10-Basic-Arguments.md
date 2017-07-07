@@ -52,6 +52,11 @@ config master.
 
 Default value: **$TRUE**
 
+## -IcingaEnableDebugLog
+This argument will define if the Icinga 2 debug log will be enabled or disabled.
+
+Default value: **$FALSE**
+
 ## -ParentEndpoints
 This parameter requires an array of string values, to which endpoints the Agent should in general 
 connect to. If you are only having one endpoint, only add one. You will have to specify all endpoints 

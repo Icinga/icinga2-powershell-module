@@ -33,19 +33,32 @@ here is a full example for installing an Agent:
               -ParentEndpoints  'icinga2a', 'icinga2b' `
               -CAServer         'icinga-master'
 
-    exit $icinga.installMonitoringComponents()          
+    exit $icinga.installMonitoringComponents();
 ```
+
+### Switch Icinga 2 Debug log
+
+The PowerShell module provides a feature to enable / disable the Icinga 2 debug log. To enable the debug
+log, simply use this function call:
+
+```powershell
+    $icinga = Icinga2AgentModule -IcingaEnableDebugLog $TRUE
+
+    exit $icinga.installMonitoringComponents();
+```
+
+To disable the debug log, either set the variable to $FALSE or leave the argument empty.
 
 ### Recommended automation with Icinga Director Self Service API
 
 For more details please take a look on the [Icinga Director Automation Guide](20-Automation.md).
 
 ```
-$icinga = Icinga2AgentModule `
+    $icinga = Icinga2AgentModule `
               -DirectorUrl       'https://icinga2-master.example.com/icingaweb2/director/' `
               -DirectorAuthToken '34086b3480965b083476c08346c34980'
 
-$icinga.installMonitoringComponents();
+    $icinga.installMonitoringComponents();
 ```
 
 ### Basic Icinga installation and configuration
@@ -66,7 +79,7 @@ Icinga Director
               -ParentZone           'icinga2-master-zone' `
               -ParentEndpoints      'icinga2a-master.example.com', 'icinga2b-master.example.com' `
 
-    exit $icinga.installMonitoringComponents()          
+    exit $icinga.installMonitoringComponents();
 ```
 
 ### Basic Icinga installation with host creation and deployment
@@ -90,5 +103,5 @@ Icinga Director will also deploy the configuration immediately and the monitorin
               -ParentZone           'icinga2-master-zone' `
               -ParentEndpoints      'icinga2a-master.example.com', 'icinga2b-master.example.com' `
 
-    exit $icinga.installMonitoringComponents()          
+    exit $icinga.installMonitoringComponents();
 ```

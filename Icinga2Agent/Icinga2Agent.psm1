@@ -15,6 +15,7 @@ function Icinga2AgentModule {
         # Agent configuration
         [string]$ParentZone,
         [bool]$AcceptConfig               = $TRUE,
+        [bool]$IcingaEnableDebugLog       = $FALSE,
         [array]$ParentEndpoints,
         [array]$EndpointsConfig,
 
@@ -69,6 +70,7 @@ function Icinga2AgentModule {
         transform_hostname      = $TransformHostname;
         parent_zone             = $ParentZone;
         accept_config           = $AcceptConfig;
+        icinga_enable_debug_log = $IcingaEnableDebugLog;
         parent_endpoints        = $ParentEndpoints;
         endpoint_config         = $EndpointsConfig;
         download_url            = $DownloadUrl;
@@ -787,13 +789,19 @@ function Icinga2AgentModule {
             }
 
             [string]$icingaNewConfig =
-'/** Icinga 2 Config - proposed by Icinga Director */
+'/** Icinga 2 Config - proposed by Icinga 2 PowerShell Module */
 include "constants.conf"
 include <itl>
 include <plugins>
 include <nscp>
 include <windows-plugins>
-// include <plugins-contrib>
+
+const PowerShellIcinga2EnableDebug = false;
+
+if (PowerShellIcinga2EnableDebug) {
+	include "features-available/debuglog.conf"
+}
+
 if (!globals.contains("NscpPath")) {
   NscpPath = dirname(msi_get_component_path("{5C45463A-4AE9-4325-96DB-6E239C034F93}"))
 }
@@ -880,9 +888,11 @@ object ApiListener "api" {
     # on Director settings
     #
     $installer | Add-Member -membertype ScriptMethod -name 'writeConfig' -value {
+        param([string]$configData);
+
         # Write new configuration to file
         $this.info('Writing icinga2.conf to ' + $this.getProperty('config_dir'));
-        [System.IO.File]::WriteAllText($this.getIcingaConfigFile(), $this.getProperty('new_icinga_config'));
+        [System.IO.File]::WriteAllText($this.getIcingaConfigFile(), $configData);
         $this.setProperty('require_restart', 'true');
     }
 
@@ -1092,7 +1102,7 @@ object ApiListener "api" {
     $installer | Add-Member -membertype ScriptMethod -name 'applyPossibleConfigChanges' -value {
         if ($this.hasConfigChanged() -And $this.getProperty('generate_config') -eq 'true') {
             $this.backupDefaultConfig();
-            $this.writeConfig();
+            $this.writeConfig($this.getProperty('new_icinga_config'));
 
             # Check if the config is valid and rollback otherwise
             if (-Not $this.isIcingaConfigValid()) {
@@ -1111,6 +1121,56 @@ object ApiListener "api" {
             }
         } else {
             $this.info('icinga2.conf did not change or required parameters not set. Nothing to do');
+        }
+    }
+
+    #
+    # Enable or disable the Icinga 2 debug log
+    #
+    $installer | Add-Member -membertype ScriptMethod -name 'switchIcingaDebugLog' -value {
+        # In case the config is not valid -> do nothing
+        if (-Not $this.isIcingaConfigValid($FALSE)) {
+            $this.error('Unable to process Icinga 2 debug configuration. The icinga2.conf is corrupt!');
+            return;
+        }
+
+        # If there is no config file defined -> do nothing
+        if (-Not (Test-Path $this.getIcingaConfigFile())) {
+            return;
+        }
+
+        [string]$icingaCurrentConfig = [System.IO.File]::ReadAllText($this.getIcingaConfigFile());
+        [string]$newIcingaConfig = '';
+
+        if ($this.config('icinga_enable_debug_log')) {
+            $this.info('Trying to enable debug log for Icinga 2...');
+            if ($icingaCurrentConfig.Contains('const PowerShellIcinga2EnableDebug = false;')) {
+                $newIcingaConfig = $icingaCurrentConfig.Replace('const PowerShellIcinga2EnableDebug = false;', 'const PowerShellIcinga2EnableDebug = true;');
+                $this.info('Icinga 2 debug log has been enabled');
+            } else {
+                $this.info('Icinga 2 debug log is already enabled or configuration not found');
+            }
+        } else {
+            $this.info('Trying to disable debug log for Icinga 2...');
+            if ($icingaCurrentConfig.Contains('const PowerShellIcinga2EnableDebug = true;')) {
+                $newIcingaConfig = $icingaCurrentConfig.Replace('const PowerShellIcinga2EnableDebug = true;', 'const PowerShellIcinga2EnableDebug = false;');
+                $this.info('Icinga 2 debug log has been disabled');
+            } else {
+                $this.info('Icinga 2 debug log is not enabled or configuration not found');
+            }
+        }
+
+        # In case we made a modification to the configuration -> write it
+        if ($newIcingaConfig -ne '') {
+            $this.writeConfig($newIcingaConfig);
+            # Validate the config if it is valid
+            if (-Not $this.isIcingaConfigValid($FALSE)) {
+                # if not write the old configuration again
+                $this.writeConfig($icingaCurrentConfig);
+                if (-Not $this.isIcingaConfigValid($FALSE)) {
+                    throw 'Critical exception: Something went wrong while processing debug configuration. The Icinga 2 config is corrupt!';
+                }
+            }
         }
     }
 
@@ -1632,6 +1692,7 @@ object ApiListener "api" {
 
             $this.generateIcingaConfiguration();
             $this.applyPossibleConfigChanges();
+            $this.switchIcingaDebugLog();
 
             if ($this.shouldFlushIcingaApiDirectory()) {
                 $this.flushIcingaApiDirectory();
