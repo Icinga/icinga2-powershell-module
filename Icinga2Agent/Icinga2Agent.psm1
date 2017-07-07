@@ -70,7 +70,7 @@ function Icinga2AgentModule {
         transform_hostname      = $TransformHostname;
         parent_zone             = $ParentZone;
         accept_config           = $AcceptConfig;
-        endpoints               = $ParentEndpoints;
+        parent_endpoints        = $ParentEndpoints;
         endpoint_config         = $EndpointsConfig;
         download_url            = $DownloadUrl;
         allow_updates           = $AllowUpdates;
@@ -114,7 +114,7 @@ function Icinga2AgentModule {
     # custom values or edited values
     #
     $installer | Add-Member -membertype ScriptMethod -name 'overrideConfig' -value {
-        param([string] $key, [string]$value);
+        param([string] $key, $value);
         $this.cfg[$key] = $value;
     }
 
@@ -344,12 +344,12 @@ function Icinga2AgentModule {
     #
     $installer | Add-Member -membertype ScriptMethod -name 'generateEndpointNodes' -value {
 
-        if ($this.config('endpoints')) {
+        if ($this.config('parent_endpoints')) {
             [string]$endpoint_objects = '';
             [string]$endpoint_nodes = '';
             [int]$endpoint_index = 0;
 
-            foreach ($endpoint in $this.config('endpoints')) {
+            foreach ($endpoint in $this.config('parent_endpoints')) {
                 $endpoint_objects += 'object Endpoint "' + "$endpoint" +'" {'+"`n";
                 $endpoint_objects += $this.getEndpointConfigurationByArrayIndex($endpoint_index);
                 $endpoint_objects += "`n" + '}' + "`n";
@@ -1318,9 +1318,9 @@ object ApiListener "api" {
                                 [array]$valueArray = $value.Split(',');
                                 $this.overrideConfig($argument, $valueArray);
                             } else {
-                                if ($value -eq 'true') {
+                                if ($value.toLower() -eq 'true') {
                                     $this.overrideConfig($argument, $TRUE);
-                                } elseif ($value -eq 'false') {
+                                } elseif ($value.toLower() -eq 'false') {
                                     $this.overrideConfig($argument, $FALSE);
                                 } else {
                                     $this.overrideConfig($argument, $value);
@@ -1331,6 +1331,8 @@ object ApiListener "api" {
                 } else {
                     $this.error('Received ' + $argumentString + ' from Icinga Director. Possibly your API token is no longer valid or the object does not exist.');
                 }
+                # Ensure we generate the required configuration for our endpoints
+                $this.generateEndpointNodes();
             }
         }
     }
