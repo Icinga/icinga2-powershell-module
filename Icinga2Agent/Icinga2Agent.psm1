@@ -1135,6 +1135,10 @@ object ApiListener "api" {
             2 { $hostname = $hostname.ToUpper(); }
             Default {} # Do nothing by default
         }
+		
+		if ($hostname -cne $this.getProperty('local_hostname')) {
+			$this.info('Transforming Agent Name to ' + $hostname);
+		}
 
         $this.setProperty('local_hostname', $hostname);
     }
@@ -1295,46 +1299,45 @@ object ApiListener "api" {
     # to allow an entire auto configuration of the Icinga 2 Agent
     #
     $installer | Add-Member -membertype ScriptMethod -name 'fetchArgumentsFromIcingaDirector' -value {
-        if ($this.config('director_auth_token')) {
-            if ($this.requireIcingaDirectorAPIVersion('1.4.0', '[Function::fetchArgumentsFromIcingaDirector]')) {
-                [string]$url = $this.config('director_url') + '/icingaweb2/director/self-service/powershell-parameters?key=' + $this.config('director_auth_token');
-                [string]$argumentString = $this.createHTTPRequest($url, '', 'POST', 'application/json', $TRUE, $FALSE);
+		param([string]$key);
+		if ($this.requireIcingaDirectorAPIVersion('1.4.0', '[Function::fetchArgumentsFromIcingaDirector]')) {
+			[string]$url = $this.config('director_url') + '/icingaweb2/director/self-service/powershell-parameters?key=' + $key;
+			[string]$argumentString = $this.createHTTPRequest($url, '', 'POST', 'application/json', $TRUE, $FALSE);
 
-                if ($this.isHTTPResponseCode($argumentString) -eq $FALSE) {
-                    # First split the entire result based in new-lines into an array
-                    [array]$arguments = $argumentString.Split("`n");
-                    $config = @{};
+			if ($this.isHTTPResponseCode($argumentString) -eq $FALSE) {
+				# First split the entire result based in new-lines into an array
+				[array]$arguments = $argumentString.Split("`n");
+				$config = @{};
 
-                    # Now loop all elements and construct a dictionary for all values
-                    foreach ($item in $arguments) {
-                        if ($item.Contains(':')) {
-                            [int]$argumentPos = $item.IndexOf(":");
-                            [string]$argument = $item.Substring(0, $argumentPos)
-                            [string]$value = $item.Substring($argumentPos + 2, $item.Length - 2 - $argumentPos);
-                            $value = $value.Replace("`r", '');
-                            $value = $value.Replace("`n", '');
+				# Now loop all elements and construct a dictionary for all values
+				foreach ($item in $arguments) {
+					if ($item.Contains(':')) {
+						[int]$argumentPos = $item.IndexOf(":");
+						[string]$argument = $item.Substring(0, $argumentPos)
+						[string]$value = $item.Substring($argumentPos + 2, $item.Length - 2 - $argumentPos);
+						$value = $value.Replace("`r", '');
+						$value = $value.Replace("`n", '');
 
-                            if ($value.Contains( ',')) {
-                                [array]$valueArray = $value.Split(',');
-                                $this.overrideConfig($argument, $valueArray);
-                            } else {
-                                if ($value.toLower() -eq 'true') {
-                                    $this.overrideConfig($argument, $TRUE);
-                                } elseif ($value.toLower() -eq 'false') {
-                                    $this.overrideConfig($argument, $FALSE);
-                                } else {
-                                    $this.overrideConfig($argument, $value);
-                                }
-                            }
-                        }
-                    }
-                } else {
-                    $this.error('Received ' + $argumentString + ' from Icinga Director. Possibly your API token is no longer valid or the object does not exist.');
-                }
-                # Ensure we generate the required configuration for our endpoints
-                $this.generateEndpointNodes();
-            }
-        }
+						if ($value.Contains( ',')) {
+							[array]$valueArray = $value.Split(',');
+							$this.overrideConfig($argument, $valueArray);
+						} else {
+							if ($value.toLower() -eq 'true') {
+								$this.overrideConfig($argument, $TRUE);
+							} elseif ($value.toLower() -eq 'false') {
+								$this.overrideConfig($argument, $FALSE);
+							} else {
+								$this.overrideConfig($argument, $value);
+							}
+						}
+					}
+				}
+			} else {
+				$this.error('Received ' + $argumentString + ' from Icinga Director. Possibly your API token is no longer valid or the object does not exist.');
+			}
+			# Ensure we generate the required configuration for our endpoints
+			$this.generateEndpointNodes();
+		}
     }
 
     #
@@ -1553,7 +1556,7 @@ object ApiListener "api" {
             # Get the current API-Version from the Icinga Director
             $this.getIcingaDirectorVersion();
             # Read arguments for auto config from the Icinga Director
-            $this.fetchArgumentsFromIcingaDirector();
+            $this.fetchArgumentsFromIcingaDirector($this.config('director_auth_token'));
             # Read the Host-API Key in case it exists
             $this.readHostAPIKeyFromDisk();
             # Get host name or FQDN if required
@@ -1562,6 +1565,7 @@ object ApiListener "api" {
             $this.doTransformHostname();
             # Try to create a host object inside the Icinga Director
             $this.createHostInsideIcingaDirector();
+            $this.fetchArgumentsFromIcingaDirector($this.getProperty('director_host_token'));
             # First check if we should get some parameters from the Icinga Director
             $this.fetchTicketFromIcingaDirector();
 
