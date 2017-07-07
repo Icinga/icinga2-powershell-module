@@ -10,11 +10,9 @@ The following two arguments provide the prefered way to automate the installatio
 in combination with the Icinga Director in Windows systems. It is the recommended and most secure way.
 
 ### -DirectorUrl
-This argument will tell the PowerShell where the Icinga Director can be found. It only requires the 
-address to the server as http or https.
-Example: https://example.com
-
-The remaining URL is build inside the PowerShell module.
+This argument will tell the PowerShell where the Icinga Director can be found. Please specify the entire 
+path to the Icinga Director!
+Example: https://example.com/icingaweb2/director/
 
 ### -DirectorAuthToken
 API key for specific host templates, allowing the configuration and creation of host objects within the 

@@ -1169,7 +1169,7 @@ object ApiListener "api" {
                 if ($this.requireIcingaDirectorAPIVersion('1.4.0', '[Function::createHostInsideIcingaDirector]')) {
                     if ($this.getProperty('director_host_token') -eq '') {
                         [string]$apiKey = $this.config('director_auth_token');
-                        [string]$url = $this.config('director_url') + '/icingaweb2/director/self-service/register-host?name=' + $this.getProperty('local_hostname') + '&key=' + $apiKey;
+                        [string]$url = $this.config('director_url') + 'self-service/register-host?name=' + $this.getProperty('local_hostname') + '&key=' + $apiKey;
                         [string]$json = '';
                         # If no JSON Object is defined (should be default), we shall create one
                         if (-Not $this.config('director_host_json')) {
@@ -1198,7 +1198,7 @@ object ApiListener "api" {
                 }
             } elseif ($this.config('director_host_json'))  {
                 # Setup the url we need to call
-                [string]$url = $this.config('director_url') + '/icingaweb2/director/host';
+                [string]$url = $this.config('director_url') + 'host';
                 # Replace the host object placeholder with the hostname or the FQDN
                 [string]$host_object_json = $this.config('director_host_json').Replace('&hostname_placeholder&', $this.getProperty('local_hostname'));
                 $host_object_json = $host_object_json.Replace('\u0026hostname_placeholder\u0026', $this.getProperty('local_hostname'));
@@ -1216,7 +1216,7 @@ object ApiListener "api" {
                 }
                 # Shall we deploy the config for the generated host?
                 if ($this.config('director_deploy_config')) {
-                    $url = $this.config('director_url') + '/icingaweb2/director/config/deploy';
+                    $url = $this.config('director_url') + 'config/deploy';
                     [string]$httpResponse = $this.createHTTPRequest($url, '', 'POST', 'application/json', $FALSE, $TRUE);
                     $this.info('Deploying configuration from Icinga Director to Icinga. Result: ' + $httpResponse);
                 }
@@ -1259,7 +1259,7 @@ object ApiListener "api" {
             # Older versions of the Director do not support plain/text and
             # would result in making this request quite useless
 
-            [string]$url = $this.config('director_url') + '/icingaweb2/director/self-service/api-version';
+            [string]$url = $this.config('director_url') + 'self-service/api-version';
             [string]$versionString = $this.createHTTPRequest($url, '', 'POST', 'application/json', $FALSE, $FALSE);
 
             if ($this.isHTTPResponseCode($versionString) -eq $FALSE) {
@@ -1330,7 +1330,7 @@ object ApiListener "api" {
         }
 
         if ($this.requireIcingaDirectorAPIVersion('1.4.0', '[Function::fetchArgumentsFromIcingaDirector]')) {
-            [string]$url = $this.config('director_url') + '/icingaweb2/director/self-service/powershell-parameters?key=' + $key;
+            [string]$url = $this.config('director_url') + 'self-service/powershell-parameters?key=' + $key;
             [string]$argumentString = $this.createHTTPRequest($url, '', 'POST', 'application/json', $TRUE, $FALSE);
 
             if ($this.isHTTPResponseCode($argumentString) -eq $FALSE) {
@@ -1378,7 +1378,7 @@ object ApiListener "api" {
 
         if ($this.getProperty('director_host_token')) {
             if ($this.requireIcingaDirectorAPIVersion('1.4.0', '[Function::fetchTicketFromIcingaDirector]')) {
-                [string]$url = $this.config('director_url') + '/icingaweb2/director/self-service/ticket?key=' + $this.getProperty('director_host_token');
+                [string]$url = $this.config('director_url') + 'self-service/ticket?key=' + $this.getProperty('director_host_token');
                 [string]$httpResponse = $this.createHTTPRequest($url, '', 'POST', 'application/json', $TRUE, $TRUE);
                 if ($this.isHTTPResponseCode($httpResponse) -eq $FALSE) {
                     $this.setProperty('icinga_ticket', $httpResponse);
@@ -1388,7 +1388,7 @@ object ApiListener "api" {
             }
         } else {
             if ($this.config('director_url') -And $this.getProperty('local_hostname')) {
-                [string]$url = $this.config('director_url') + '/icingaweb2/director/host/ticket?name=' + $this.getProperty('local_hostname');
+                [string]$url = $this.config('director_url') + 'host/ticket?name=' + $this.getProperty('local_hostname');
                 [string]$httpResponse = $this.createHTTPRequest($url, '', 'POST', 'application/json', $FALSE, $TRUE);
 
                 if ($this.isHTTPResponseCode($httpResponse) -eq $FALSE) {

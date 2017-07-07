@@ -42,7 +42,7 @@ For more details please take a look on the [Icinga Director Automation Guide](20
 
 ```
 $icinga = Icinga2AgentModule `
-              -DirectorUrl       'https://icinga2-master.example.com' `
+              -DirectorUrl       'https://icinga2-master.example.com/icingaweb2/director/' `
               -DirectorAuthToken '34086b3480965b083476c08346c34980'
 
 $icinga.installMonitoringComponents();
@@ -59,7 +59,7 @@ Icinga Director
               -InstallAgentVersion  '2.6.3' `
               -AllowUpdates         $TRUE `
               -FetchAgentFQDN       $TRUE `
-              -DirectorUrl          'https://icinga2a-master.example.com' `
+              -DirectorUrl          'https://icinga2a-master.example.com/icingaweb2/director/' `
               -DirectorUser         'icingaadmin' `
               -DirectorPassword     'icinga' `
               -CAServer             'icinga2a-master.example.com' `
@@ -81,7 +81,7 @@ Icinga Director will also deploy the configuration immediately and the monitorin
               -InstallAgentVersion  '2.6.3' `
               -AllowUpdates         $TRUE `
               -FetchAgentFQDN       $TRUE `
-              -DirectorUrl          'https://icinga2a-master.example.com' `
+              -DirectorUrl          'https://icinga2a-master.example.com/icingaweb2/director/' `
               -DirectorUser         'icingaadmin' `
               -DirectorPassword     'icinga' `
               -DirectorHostObject   '{"object_name":"&hostname_placeholder&","object_type":"object","vars":{"os":"Windows"},"imports":["Icinga Agent"],"address":"&hostname_placeholder&","display_name":"&hostname_placeholder&"}' `
