@@ -46,5 +46,5 @@ Now you will have all members and variables availalbe inside $icinga, which can 
               -ParentEndpoints  'icinga2a', 'icinga2b' `
               -CAServer         'icinga-master'
 
-    exit $icinga.installIcinga2Agent()          
+    exit $icinga.installMonitoringComponents()          
 ```    
