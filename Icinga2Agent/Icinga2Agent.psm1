@@ -432,8 +432,18 @@ function Icinga2AgentModule {
             return $httpResult;
         } catch [System.Net.WebException] {
             if ($printExceptionMessage) {
+                # Print an exception message and the possible body in case we received one
+                # to make troubleshooting easier
+                $errorResponseStream = $_.Exception.Response.GetResponseStream();
+                $errorStreamReader = New-Object IO.StreamReader($errorResponseStream);
+                $errorResponse = $errorStreamReader.ReadToEnd();
+                $errorStreamReader.Close();
                 $this.error($_.Exception.Message);
+                if ($errorResponse -ne '') {
+                    $this.error($errorResponse);
+                }
             }
+
             $exceptionMessage = $_.Exception.Response;
             $httpErrorCode = [int][system.net.httpstatuscode]$exceptionMessage.StatusCode;
             return $httpErrorCode;
@@ -1135,10 +1145,10 @@ object ApiListener "api" {
             2 { $hostname = $hostname.ToUpper(); }
             Default {} # Do nothing by default
         }
-		
-		if ($hostname -cne $this.getProperty('local_hostname')) {
-			$this.info('Transforming Agent Name to ' + $hostname);
-		}
+
+        if ($hostname -cne $this.getProperty('local_hostname')) {
+            $this.info('Transforming Agent Name to ' + $hostname);
+        }
 
         $this.setProperty('local_hostname', $hostname);
     }
@@ -1168,14 +1178,14 @@ object ApiListener "api" {
 
                         $this.info('Creating host ' + $this.getProperty('local_hostname') + ' over API token inside Icinga Director.');
 
-                        [string]$httpResponse = $this.createHTTPRequest($url, $json, 'POST', 'application/json', $TRUE, $FALSE);
+                        [string]$httpResponse = $this.createHTTPRequest($url, $json, 'POST', 'application/json', $TRUE, $TRUE);
 
                         if ($this.isHTTPResponseCode($httpResponse) -eq $FALSE) {
                             $this.setProperty('director_host_token', $httpResponse);
                             $this.writeHostAPIKeyToDisk();
                         } else {
                             if ($httpResponse -eq '400') {
-                                $this.warn('Received response 400 from Icinga Director. Possibly you tried to re-create the host ' + $this.getProperty('local_hostname'));
+                                $this.warn('Received response 400 from Icinga Director. Possibly you tried to re-create the host ' + $this.getProperty('local_hostname') + '. In case the host already exists, please remove the Host-Api-Key inside the Icinga Director and try again.');
                             } else {
                                 $this.warn('Failed to create host. Response code ' + $httpResponse);
                             }
@@ -1299,45 +1309,59 @@ object ApiListener "api" {
     # to allow an entire auto configuration of the Icinga 2 Agent
     #
     $installer | Add-Member -membertype ScriptMethod -name 'fetchArgumentsFromIcingaDirector' -value {
-		param([string]$key);
-		if ($this.requireIcingaDirectorAPIVersion('1.4.0', '[Function::fetchArgumentsFromIcingaDirector]')) {
-			[string]$url = $this.config('director_url') + '/icingaweb2/director/self-service/powershell-parameters?key=' + $key;
-			[string]$argumentString = $this.createHTTPRequest($url, '', 'POST', 'application/json', $TRUE, $FALSE);
+        param([bool]$globalConfig);
 
-			if ($this.isHTTPResponseCode($argumentString) -eq $FALSE) {
-				# First split the entire result based in new-lines into an array
-				[array]$arguments = $argumentString.Split("`n");
-				$config = @{};
+        # By default we will use the Host-Api-Key stored on the disk (if written on)
+        [string]$key = $this.getProperty('director_host_token');
 
-				# Now loop all elements and construct a dictionary for all values
-				foreach ($item in $arguments) {
-					if ($item.Contains(':')) {
-						[int]$argumentPos = $item.IndexOf(":");
-						[string]$argument = $item.Substring(0, $argumentPos)
-						[string]$value = $item.Substring($argumentPos + 2, $item.Length - 2 - $argumentPos);
-						$value = $value.Replace("`r", '');
-						$value = $value.Replace("`n", '');
+        # In case we are not having the Host-Api-Key already, use the value from the argument
+        if($globalConfig -eq $TRUE) {
+             $key = $this.config('director_auth_token');
+        }
 
-						if ($value.Contains( ',')) {
-							[array]$valueArray = $value.Split(',');
-							$this.overrideConfig($argument, $valueArray);
-						} else {
-							if ($value.toLower() -eq 'true') {
-								$this.overrideConfig($argument, $TRUE);
-							} elseif ($value.toLower() -eq 'false') {
-								$this.overrideConfig($argument, $FALSE);
-							} else {
-								$this.overrideConfig($argument, $value);
-							}
-						}
-					}
-				}
-			} else {
-				$this.error('Received ' + $argumentString + ' from Icinga Director. Possibly your API token is no longer valid or the object does not exist.');
-			}
-			# Ensure we generate the required configuration for our endpoints
-			$this.generateEndpointNodes();
-		}
+        # If no key is specified, we are not having set one and should leave this function
+        if ($key -eq '') {
+            return;
+        }
+
+        if ($this.requireIcingaDirectorAPIVersion('1.4.0', '[Function::fetchArgumentsFromIcingaDirector]')) {
+            [string]$url = $this.config('director_url') + '/icingaweb2/director/self-service/powershell-parameters?key=' + $key;
+            [string]$argumentString = $this.createHTTPRequest($url, '', 'POST', 'application/json', $TRUE, $FALSE);
+
+            if ($this.isHTTPResponseCode($argumentString) -eq $FALSE) {
+                # First split the entire result based in new-lines into an array
+                [array]$arguments = $argumentString.Split("`n");
+                $config = @{};
+
+                # Now loop all elements and construct a dictionary for all values
+                foreach ($item in $arguments) {
+                    if ($item.Contains(':')) {
+                        [int]$argumentPos = $item.IndexOf(":");
+                        [string]$argument = $item.Substring(0, $argumentPos)
+                        [string]$value = $item.Substring($argumentPos + 2, $item.Length - 2 - $argumentPos);
+                        $value = $value.Replace("`r", '');
+                        $value = $value.Replace("`n", '');
+
+                        if ($value.Contains( ',')) {
+                            [array]$valueArray = $value.Split(',');
+                            $this.overrideConfig($argument, $valueArray);
+                        } else {
+                            if ($value.toLower() -eq 'true') {
+                                $this.overrideConfig($argument, $TRUE);
+                            } elseif ($value.toLower() -eq 'false') {
+                                $this.overrideConfig($argument, $FALSE);
+                            } else {
+                                $this.overrideConfig($argument, $value);
+                            }
+                        }
+                    }
+                }
+            } else {
+                $this.error('Received ' + $argumentString + ' from Icinga Director. Possibly your API token is no longer valid or the object does not exist.');
+            }
+            # Ensure we generate the required configuration for our endpoints
+            $this.generateEndpointNodes();
+        }
     }
 
     #
@@ -1350,7 +1374,7 @@ object ApiListener "api" {
         if ($this.getProperty('director_host_token')) {
             if ($this.requireIcingaDirectorAPIVersion('1.4.0', '[Function::fetchTicketFromIcingaDirector]')) {
                 [string]$url = $this.config('director_url') + '/icingaweb2/director/self-service/ticket?key=' + $this.getProperty('director_host_token');
-                [string]$httpResponse = $this.createHTTPRequest($url, '', 'POST', 'application/json', $TRUE, $FALSE);
+                [string]$httpResponse = $this.createHTTPRequest($url, '', 'POST', 'application/json', $TRUE, $TRUE);
                 if ($this.isHTTPResponseCode($httpResponse) -eq $FALSE) {
                     $this.setProperty('icinga_ticket', $httpResponse);
                 } else {
@@ -1360,7 +1384,7 @@ object ApiListener "api" {
         } else {
             if ($this.config('director_url') -And $this.getProperty('local_hostname')) {
                 [string]$url = $this.config('director_url') + '/icingaweb2/director/host/ticket?name=' + $this.getProperty('local_hostname');
-                [string]$httpResponse = $this.createHTTPRequest($url, '', 'POST', 'application/json', $FALSE, $FALSE);
+                [string]$httpResponse = $this.createHTTPRequest($url, '', 'POST', 'application/json', $FALSE, $TRUE);
 
                 if ($this.isHTTPResponseCode($httpResponse) -eq $FALSE) {
                     # Lookup all " inside the return string
@@ -1556,7 +1580,8 @@ object ApiListener "api" {
             # Get the current API-Version from the Icinga Director
             $this.getIcingaDirectorVersion();
             # Read arguments for auto config from the Icinga Director
-            $this.fetchArgumentsFromIcingaDirector($this.config('director_auth_token'));
+            # At first only with our public key for global config attributes
+            $this.fetchArgumentsFromIcingaDirector($TRUE);
             # Read the Host-API Key in case it exists
             $this.readHostAPIKeyFromDisk();
             # Get host name or FQDN if required
@@ -1565,7 +1590,9 @@ object ApiListener "api" {
             $this.doTransformHostname();
             # Try to create a host object inside the Icinga Director
             $this.createHostInsideIcingaDirector();
-            $this.fetchArgumentsFromIcingaDirector($this.getProperty('director_host_token'));
+            # Load the configuration again, but this time with our
+            # Host key to fetch additional informations like endpoints
+            $this.fetchArgumentsFromIcingaDirector($FALSE);
             # First check if we should get some parameters from the Icinga Director
             $this.fetchTicketFromIcingaDirector();
 
