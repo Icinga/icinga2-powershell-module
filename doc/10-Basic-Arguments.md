@@ -88,7 +88,7 @@ as follows: *Icinga2-v[InstallAgentVersion]-[OSArchitecture].msi*
 
 Full example: Icinga2-v2.6.3-x86_64.msi
 
-Default value: **https://packages.icinga.org/windows/**
+Default value: **https://packages.icinga.com/windows/**
 
 ## -AllowUpdates
 In case the Icinga 2 Agent is already installed on the system, this parameter will allow you to 

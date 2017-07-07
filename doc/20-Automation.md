@@ -44,7 +44,7 @@ An entire code example on how to call the PowerShell module can be found below:
 
 ```
 $icinga = Icinga2AgentModule `
-              -DirectorUrl       'https://icinga2-master.localdomain' `
+              -DirectorUrl       'https://icinga2-master.example.com' `
               -DirectorAuthToken '34086b3480965b083476c08346c34980'
 
 $icinga.installMonitoringComponents();
