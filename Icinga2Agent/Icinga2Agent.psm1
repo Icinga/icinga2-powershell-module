@@ -1106,7 +1106,7 @@ object ApiListener "api" {
     # easier
     #
     $installer | Add-Member -membertype ScriptMethod -name 'fetchHostnameOrFQDN' -value {
-        if (($this.config('fetch_agent_fqdn') -Or $this.config('director_auth_token')) -And (Get-WmiObject win32_computersystem).Domain) {
+        if ($this.config('fetch_agent_fqdn') -And (Get-WmiObject win32_computersystem).Domain) {
             [string]$hostname = (Get-WmiObject win32_computersystem).DNSHostName + '.' + (Get-WmiObject win32_computersystem).Domain;
             $this.setProperty('local_hostname', $hostname);
             $this.info('Setting internal Agent Name to ' + $this.getProperty('local_hostname'));
@@ -1295,9 +1295,9 @@ object ApiListener "api" {
     # to allow an entire auto configuration of the Icinga 2 Agent
     #
     $installer | Add-Member -membertype ScriptMethod -name 'fetchArgumentsFromIcingaDirector' -value {
-        if ($this.getProperty('director_host_token')) {
+        if ($this.config('director_auth_token')) {
             if ($this.requireIcingaDirectorAPIVersion('1.4.0', '[Function::fetchArgumentsFromIcingaDirector]')) {
-                [string]$url = $this.config('director_url') + '/icingaweb2/director/self-service/powershell-parameters?key=' + $this.getProperty('director_host_token');
+                [string]$url = $this.config('director_url') + '/icingaweb2/director/self-service/powershell-parameters?key=' + $this.config('director_auth_token');
                 [string]$argumentString = $this.createHTTPRequest($url, '', 'POST', 'application/json', $TRUE, $FALSE);
 
                 if ($this.isHTTPResponseCode($argumentString) -eq $FALSE) {
@@ -1404,7 +1404,7 @@ object ApiListener "api" {
                 if ($LASTEXITCODE -eq 0) {
                     $this.info('NSClient++ successfully installed');
                 } else {
-                    $this.error('Failed to install NSClient++')
+                    $this.error('Failed to install NSClient++');
                 }
 
                 # If defined remove the Firewall Rule to secure the system
@@ -1552,6 +1552,8 @@ object ApiListener "api" {
 
             # Get the current API-Version from the Icinga Director
             $this.getIcingaDirectorVersion();
+            # Read arguments for auto config from the Icinga Director
+            $this.fetchArgumentsFromIcingaDirector();
             # Read the Host-API Key in case it exists
             $this.readHostAPIKeyFromDisk();
             # Get host name or FQDN if required
@@ -1560,8 +1562,6 @@ object ApiListener "api" {
             $this.doTransformHostname();
             # Try to create a host object inside the Icinga Director
             $this.createHostInsideIcingaDirector();
-            # Read arguments for auto config from the Icinga Director
-            $this.fetchArgumentsFromIcingaDirector();
             # First check if we should get some parameters from the Icinga Director
             $this.fetchTicketFromIcingaDirector();
 
