@@ -19,7 +19,7 @@ function Icinga2AgentModule {
         [array]$EndpointsConfig,
 
         # Agent installation / update
-        [string]$DownloadUrl              = 'https://packages.icinga.org/windows/',
+        [string]$DownloadUrl              = 'https://packages.icinga.com/windows/',
         [bool]$AllowUpdates               = $FALSE,
         [array]$InstallerHashes,
         [bool]$FlushApiDirectory          = $FALSE,
@@ -37,7 +37,6 @@ function Icinga2AgentModule {
         [string]$DirectorDomain,
         [string]$DirectorAuthToken,
         [string]$DirectorHostObject,
-        [bool]$DirectorAutoConfig         = $FALSE,
         [bool]$DirectorDeployConfig       = $FALSE,
 
         # NSClient Installer
@@ -86,7 +85,6 @@ function Icinga2AgentModule {
         director_domain         = $DirectorDomain;
         director_auth_token     = $DirectorAuthToken;
         director_host_json      = $DirectorHostObject;
-        director_auto_config    = $DirectorAutoConfig;
         director_deploy_config  = $DirectorDeployConfig;
         install_nsclient        = $InstallNSClient;
         nsclient_add_defaults   = $NSClientAddDefaults;
