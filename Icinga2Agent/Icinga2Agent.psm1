@@ -420,22 +420,14 @@ function Icinga2AgentModule {
         }
 
         try {
-            $httpResponse = $httpRequest.GetResponse();
-            $responseStream = $httpResponse.getResponseStream();
-            $streamReader = New-Object IO.StreamReader($responseStream);
-            $httpResult = $streamReader.ReadToEnd();
-            $httpResponse.close()
-            $streamReader.close()
 
-            return $httpResult;
+            return $this.readResponseStream($httpRequest.GetResponse());
+
         } catch [System.Net.WebException] {
             if ($printExceptionMessage) {
                 # Print an exception message and the possible body in case we received one
                 # to make troubleshooting easier
-                $errorResponseStream = $_.Exception.Response.GetResponseStream();
-                $errorStreamReader = New-Object IO.StreamReader($errorResponseStream);
-                $errorResponse = $errorStreamReader.ReadToEnd();
-                $errorStreamReader.Close();
+                [string]$errorResponse = $this.readResponseStream($_.Exception.Response);
                 $this.error($_.Exception.Message);
                 if ($errorResponse -ne '') {
                     $this.error($errorResponse);
@@ -448,6 +440,20 @@ function Icinga2AgentModule {
         }
 
         return '';
+    }
+
+    #
+    # Read the content of a response and return it's value as a string
+    #
+    $installer | Add-Member -membertype ScriptMethod -name 'readResponseStream' -value {
+        param([System.Object]$response);
+        $responseStream = $response.getResponseStream();
+        $streamReader = New-Object IO.StreamReader($responseStream);
+        $result = $streamReader.ReadToEnd();
+        $response.close()
+        $streamReader.close()
+
+        return $result;
     }
 
     #
@@ -1499,7 +1505,7 @@ object ApiListener "api" {
     #
     $installer | Add-Member -membertype ScriptMethod -name 'removeNSClientFirewallRule' -value {
         if ($this.config('nsclient_firewall') -eq $FALSE) {
-            $this.info('Removing NSClient++ Firewall Rule...');
+            $this.info('Trying to remove NSClient++ Firewall Rule...');
             $firewallRule = &netsh @('advfirewall', 'firewall', 'delete', 'rule', 'name=', 'NSClient++ Monitoring Agent');
             $this.info($firewallRule);
             $firewallRule = &netsh @('advfirewall', 'firewall', 'show', 'rule', 'name=', 'NSClient++ Monitoring Agent');
