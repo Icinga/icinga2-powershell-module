@@ -853,27 +853,51 @@ function Icinga2AgentModule {
         # Stop the current service
         $result = $this.startProcess("sc.exe", "stop $service");
 
-        [int]$counter = 0;
-
         # Wait until the service is stopped
-        while ($TRUE) {
-            $serviceState = (Get-WMIObject win32_service -Filter "Name='$service'").State;
-            if ($serviceState -eq 'Stopped') {
-                break;
-            }
-            Start-Sleep -Milliseconds 100;
-            $counter += 1;
-
-            if ($counter -gt 200) {
-                $this.error('Failed to stop service ' + $service + '. Service is not responding.');
-                break;
-            }
-        }
+        $serviceResult = $this.waitForServiceToReachState($service, 'Stopped');
 
         # Start the service again
         $result = $this.startProcess("sc.exe", "start $service");
 
+        # Wait until the service is started
+        if ($this.waitForServiceToReachState($service, 'Started') -eq $FALSE) {
+            $result.Set_Item('message', 'Failed to restart service ' + $service + '.');
+            $result.Set_Item('exitcode', '1');
+        }
+
         return $result;
+    }
+
+    #
+    # This function will wait for a specific service until it reaches
+    # the defined state. Will break after 20 seconds with an error message
+    #
+    $installer | Add-Member -membertype ScriptMethod -name 'waitForServiceToReachState' -value {
+        param([string]$service, [string]$state);
+
+        [int]$counter = 0;
+
+        # Wait until the service reached the desired state
+        while ($TRUE) {
+
+            # Get the current state of the service
+            $serviceState = (Get-WMIObject win32_service -Filter "Name='$service'").State;
+            if ($serviceState -eq $state) {
+                break;
+            }
+
+            # Sleep a little to prevent crushing the CPU
+            Start-Sleep -Milliseconds 100;
+            $counter += 1;
+
+            # After 20 seconds break with an error. It look's like the service does not respond
+            if ($counter -gt 200) {
+                $this.error('Timeout reached while waiting for ' + $service + ' to reach state ' + $state + '. Service is not responding.');
+                return $FALSE;
+            }
+        }
+
+        return $TRUE;
     }
 
     #
