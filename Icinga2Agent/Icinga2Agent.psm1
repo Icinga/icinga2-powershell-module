@@ -1520,11 +1520,14 @@ object ApiListener "api" {
                 [string]$versionString = $versionString.Replace('"', '').Replace("`r", '').Replace("`n", '');
                 [array]$version = $versionString.Split('.');
                 $this.setProperty('icinga_director_api_version', $versionString);
+                return;
             } else {
                 $this.warn('You seem to use an older Version of the Icinga Director, as no API version could be retreived.');
                 $this.setProperty('icinga_director_api_version', '0.0.0');
+                return;
             }
         }
+        $this.setProperty('icinga_director_api_version', 'false');
     }
 
     #
@@ -1532,6 +1535,11 @@ object ApiListener "api" {
     #
     $installer | Add-Member -membertype ScriptMethod -name 'requireIcingaDirectorAPIVersion' -value {
         param([string]$version, [string]$functionName);
+
+        # Director URL not specified
+        if ($this.getProperty('icinga_director_api_version') -eq 'false') {
+            return $FALSE;
+        }
 
         if ($this.getProperty('icinga_director_api_version') -eq '0.0.0') {
             $this.error('The feature ' + $functionName + ' requires Icinga Director API-Version ' + $version + '. Your Icinga Director version does not support the API.');
