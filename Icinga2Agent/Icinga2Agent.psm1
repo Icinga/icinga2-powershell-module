@@ -1816,14 +1816,22 @@ object ApiListener "api" {
     #
     $installer | Add-Member -membertype ScriptMethod -name 'removeNSClientFirewallRule' -value {
         if ($this.config('nsclient_firewall') -eq $FALSE) {
+
+            $result = $this.startProcess('netsh', $FALSE, 'advfirewall firewall show rule name="NSClient++ Monitoring Agent"');
+            if ($result.Get_Item('exitcode') -ne 0) {
+                # Firewall rule was not found. Nothing to do
+                $this.info('NSClient++ Firewall Rule is not installed');
+                return;
+            }
+
             $this.info('Trying to remove NSClient++ Firewall Rule...');
-            $firewallRule = &netsh @('advfirewall', 'firewall', 'delete', 'rule', 'name=', 'NSClient++ Monitoring Agent');
-            $this.info($firewallRule);
-            $firewallRule = &netsh @('advfirewall', 'firewall', 'show', 'rule', 'name=', 'NSClient++ Monitoring Agent');
-            if ($firewallRule -eq '') {
-                $this.info('NSClient++ Firewall Rule successfully removed');
+
+            $result = $this.startProcess('netsh', $TRUE, 'advfirewall firewall delete rule name="NSClient++ Monitoring Agent"');
+
+            if ($result.Get_Item('exitcode') -ne 0) {
+                $this.error('Failed to remove NSClient++ Firewall rule: ' + $result.Get_Item('message'));
             } else {
-                $this.error('Failed to remove NSClient++ Firewall Rule.')
+                $this.info('NSClient++ Firewall Rule has been successfully removed');
             }
         }
     }
