@@ -684,6 +684,26 @@ function Icinga2AgentModule {
     }
 
     #
+    # Get the default path or our custom path for the NSClient++
+    #
+    $installer | Add-Member -membertype ScriptMethod -name 'getNSClientDefaultExecutablePath' -value {
+
+        if ($this.config('nsclient_directory')) {
+            return $this.config('nsclient_directory') + '\nscp.exe';
+        }
+
+        if (Test-Path ('C:\Program Files\NSClient++\nscp.exe')) {
+            return 'C:\Program Files\NSClient++\nscp.exe';
+        }
+
+        if (Test-Path ('C:\Program Files (x86)\NSClient++\nscp.exe')) {
+            return 'C:\Program Files (x86)\NSClient++\nscp.exe';
+        }
+
+        return '';
+    }
+
+    #
     # In case have the Agent already installed
     # We might use a different installation path
     # for the Agent. This function will return
@@ -967,7 +987,7 @@ include <windows-plugins>
 const PowerShellIcinga2EnableDebug = false;
 
 if (PowerShellIcinga2EnableDebug) {
-	include "features-available/debuglog.conf"
+  include "features-available/debuglog.conf"
 }
 
 if (!globals.contains("NscpPath")) {
@@ -1246,10 +1266,15 @@ object ApiListener "api" {
             throw 'Parent Zone not defined. Please specify it with -ParentZone <name>';
         }
         $icingaBinary = $this.getInstallPath() + '\sbin\icinga2.exe';
-        $output = &$icingaBinary @('daemon', '-C');
-        if ($LASTEXITCODE -ne 0) {
-            $this.error($output);
-            return $FALSE;
+
+        if (Test-Path $icingaBinary) {
+            $output = &$icingaBinary @('daemon', '-C');
+            if ($LASTEXITCODE -ne 0) {
+                $this.error($output);
+                return $FALSE;
+            }
+        } else {
+            $this.warn('Icinga 2 config validation not possible. Icinga 2 executable not found. Possibly the Agent is not installed.');
         }
         return $TRUE;
     }
@@ -1776,12 +1801,13 @@ object ApiListener "api" {
     #
     $installer | Add-Member -membertype ScriptMethod -name 'addNSClientDefaultConfig' -value {
         if ($this.config('nsclient_add_defaults')) {
-            [string]$NSClientBinary = $this.config('nsclient_directory') + '\nscp.exe';
+            [string]$NSClientBinary = $this.getNSClientDefaultExecutablePath();
+
             if (Test-Path ($NSClientBinary)) {
                 $this.info('Generating all default NSClient++ config values');
-                $result = &$NSClientBinary @('settings', '--generate', '--add-defaults', '--load-all');
-                if ($result -ne '') {
-                    $this.printAndAssertResultBasedOnExitCode($result, $LASTEXITCODE);
+                $result = $this.startProcess($NSClientBinary, 'settings --generate --add-defaults --load-all');
+                if ($result.Get_Item('exitcode') -ne 0) {
+                    $this.error($result.Get_Item('message'));
                 }
             } else {
                 $this.error('Failed to generate NSClient++ defaults config. Path to executable is not valid: ' + $NSClientBinary);
@@ -1848,7 +1874,7 @@ object ApiListener "api" {
                     # In case we have an API key assigned, write it to disk
                     $this.writeHostAPIKeyToDisk();
                 } else {
-                    throw 'Icinga 2 Agent is not installed and not allowed of beeing installed. Nothing to do.';
+                    $this.warn('Icinga 2 Agent is not installed and not allowed of beeing installed.');
                 }
             }
 
