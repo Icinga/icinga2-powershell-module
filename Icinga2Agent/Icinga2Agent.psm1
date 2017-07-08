@@ -608,8 +608,18 @@ function Icinga2AgentModule {
         }
         $this.verifyInstallerChecksumAndThrowException();
         $this.info('Installing Icinga 2 Agent');
-        Start-Process $this.getInstallerPath() -ArgumentList "/quiet" -wait;
-        $this.info('Icinga 2 Agent installed.');
+
+        # Start the installer process
+        $result = $this.startProcess('MsiExec.exe', $TRUE, '/quiet /i "' + $this.getInstallerPath() + '"');
+
+        # Exit Code 0 means the Agent was installed successfully
+        # Otherwise we require to throw an error
+        if ($result.Get_Item('exitcode') -ne 0) {
+            $this.error('Failed to install Icinga 2 Agent. ' + $result.Get_Item('message'));
+        } else {
+            $this.info('Icinga 2 Agent installed.');
+        }
+
         $this.setProperty('require_restart', 'true');
     }
 
@@ -628,10 +638,29 @@ function Icinga2AgentModule {
         }
 
         $this.info('Removing previous Icinga 2 Agent version...');
-        Start-Process "MsiExec.exe" -ArgumentList ($this.getProperty('uninstall_id') +' /q') -wait;
+        # Start the uninstaller process
+        $result = $this.startProcess('MsiExec.exe', $TRUE, $this.getProperty('uninstall_id') +' /q');
+
+        # Exit Code 0 means the Agent was removed successfully
+        # Otherwise we require to throw an error
+        if ($result.Get_Item('exitcode') -ne 0) {
+            $this.error('Failed to remove Icinga 2 Agent. ' + $result.Get_Item('message'));
+        } else {
+            $this.info('Icinga 2 Agent successfully removed.');
+        }
+
         $this.info('Installing new Icinga 2 Agent version...');
-        Start-Process $this.getInstallerPath() -ArgumentList "/quiet" -wait;
-        $this.info('Agent successfully updated.');
+        # Start the installer process
+        $result = $this.startProcess('MsiExec.exe', $TRUE, '/quiet /i "' + $this.getInstallerPath() + '"');
+
+        # Exit Code 0 means the Agent was removed successfully
+        # Otherwise we require to throw an error
+        if ($result.Get_Item('exitcode') -ne 0) {
+            $this.error('Failed to install new Icinga 2 Agent. ' + $result.Get_Item('message'));
+        } else {
+            $this.info('Icinga 2 Agent successfully updated.');
+        }
+
         $this.setProperty('cur_install_dir', $this.getProperty('def_install_dir'));
         $this.setProperty('require_restart', 'true');
     }
@@ -821,7 +850,7 @@ function Icinga2AgentModule {
         # Try to update the service name and return an error in case of a failure
         # In the error case we do not have to deal with cleanup, as no change was made anyway
         $this.info('Updating Icinga 2 service user to ' + $newUser);
-        $result = $this.startProcess('sc.exe', 'config icinga2 obj="' + $newUser + '" ' + 'password=' + $password);
+        $result = $this.startProcess('sc.exe', $TRUE, 'config icinga2 obj="' + $newUser + '" ' + 'password=' + $password);
 
         if ($result.Get_Item('exitcode') -ne 0) {
             $this.error($result.Get_Item('message'));
@@ -841,12 +870,11 @@ function Icinga2AgentModule {
         if ($result.Get_Item('exitcode') -ne 0) {
             $this.error($result.Get_Item('message'));
             $this.info('Reseting user to previous working user ' + $currentUser.StartName);
-            $result = $this.startProcess('sc.exe', 'config icinga2 obj="' + $currentUser.StartName + '" ' + 'password=' + $password);
+            $result = $this.startProcess('sc.exe', $TRUE, 'config icinga2 obj="' + $currentUser.StartName + '" ' + 'password=' + $password);
             $result = $this.restartService('icinga2');
             if ($result.Get_Item('exitcode') -ne 0) {
                 $this.error('Failed to reset Icinga 2 service user to the previous user ' + $currentUser.StartName + '. Setting user to "LocalSystem" now to ensure the service integrity');
-                $result = $this.startProcess('sc.exe', 'config icinga2 obj="LocalSystem" password=dummy');
-                #$result = &sc.exe @('config', 'icinga2', 'obj=', 'LocalSystem', 'password=', 'test');
+                $result = $this.startProcess('sc.exe', $TRUE, 'config icinga2 obj="LocalSystem" password=dummy');
                 $this.info($result.Get_Item('message'));
                 $result = $this.restartService('icinga2');
                 if ($result.Get_Item('exitcode') -eq 0) {
@@ -871,13 +899,13 @@ function Icinga2AgentModule {
         $this.info('Restarting service ' + $service + '...');
 
         # Stop the current service
-        $result = $this.startProcess("sc.exe", "stop $service");
+        $result = $this.startProcess("sc.exe", $TRUE, "stop $service");
 
         # Wait until the service is stopped
         $serviceResult = $this.waitForServiceToReachState($service, 'Stopped');
 
         # Start the service again
-        $result = $this.startProcess("sc.exe", "start $service");
+        $result = $this.startProcess("sc.exe", $TRUE, "start $service");
 
         # Wait until the service is started
         if ($this.waitForServiceToReachState($service, 'Started') -eq $FALSE) {
@@ -925,7 +953,7 @@ function Icinga2AgentModule {
     # Will return a dictionary with results (message, error, exitcode)
     #
     $installer | Add-Member -membertype ScriptMethod -name 'startProcess' -value {
-        param([string]$executable, [string]$arguments);
+        param([string]$executable, [bool]$flushNewLines, [string]$arguments);
 
         $processData = New-Object System.Diagnostics.ProcessStartInfo;
         $processData.FileName = $executable;
@@ -939,8 +967,10 @@ function Icinga2AgentModule {
         $process.WaitForExit();
         $stdout = $process.StandardOutput.ReadToEnd();
         $stderr = $process.StandardError.ReadToEnd();
-        $stdout = $stdout.Replace("`n", '').Replace("`r", '');
-        $stderr = $stderr.Replace("`n", '').Replace("`r", '');
+        if ($flushNewLines) {
+            $stdout = $stdout.Replace("`n", '').Replace("`r", '');
+            $stderr = $stderr.Replace("`n", '').Replace("`r", '');
+        }
 
         $result = @{};
         $result.Add('message', $stdout);
@@ -1078,6 +1108,11 @@ object ApiListener "api" {
     $installer | Add-Member -membertype ScriptMethod -name 'writeConfig' -value {
         param([string]$configData);
 
+        if (-Not (Test-Path $this.getProperty('config_dir'))) {
+            $this.warn('Unable to write Icinga 2 configuration. The required directory was not found. Possibly the Icinga 2 Agent is not installed.');
+            return;
+        }
+
         # Write new configuration to file
         $this.info('Writing icinga2.conf to ' + $this.getProperty('config_dir'));
         [System.IO.File]::WriteAllText($this.getIcingaConfigFile(), $configData);
@@ -1126,15 +1161,27 @@ object ApiListener "api" {
             [string]$icingaBinary = $this.getInstallPath() + '\sbin\icinga2.exe';
             [string]$agentName = $this.getProperty('local_hostname');
 
+            if (-Not (Test-Path $icingaBinary)) {
+                $this.warn('Unable to generate Icinga 2 certificates. Icinga 2 executable not found. It looks like the Icinga 2 Agent is not installed.');
+                return;
+            }
+
             # Generate the certificate
             $this.info('Generating Icinga 2 certificates');
-            [string]$result = &$icingaBinary @('pki', 'new-cert', '--cn', $this.getProperty('local_hostname'), '--key', ($icingaPkiDir + $agentName + '.key'), '--cert', ($icingaPkiDir + $agentName + '.crt'));
-            $this.printAndAssertResultBasedOnExitCode($result, $LASTEXITCODE);
+
+            $result = $this.startProcess($icingaBinary, $FALSE, 'pki new-cert --cn ' + $this.getProperty('local_hostname') + ' --key ' + $icingaPkiDir + $agentName + '.key --cert ' + $icingaPkiDir + $agentName + '.crt');
+            if ($result.Get_Item('exitcode') -ne 0) {
+                throw $result.Get_Item('message');
+            }
+            $this.info($result.Get_Item('message'));
 
             # Save Certificate
             $this.info("Storing Icinga 2 certificates");
-            $result = &$icingaBinary @('pki', 'save-cert', '--key', ($icingaPkiDir + $agentName + '.key'), '--trustedcert', ($icingaPkiDir + 'trusted-master.crt'), '--host', $this.config('ca_server'));
-            $this.printAndAssertResultBasedOnExitCode($result, $LASTEXITCODE);
+            $result = $this.startProcess($icingaBinary, $FALSE, 'pki save-cert --key ' + $icingaPkiDir + $agentName + '.key --trustedcert ' + $icingaPkiDir + 'trusted-master.crt --host ' + $this.config('ca_server'));
+            if ($result.Get_Item('exitcode') -ne 0) {
+                throw $result.Get_Item('message');
+            }
+            $this.info($result.Get_Item('message'));
 
             # Validate if set against a given fingerprint for the CA
             if (-Not $this.validateCertificate($icingaPkiDir + 'trusted-master.crt')) {
@@ -1143,8 +1190,11 @@ object ApiListener "api" {
 
             # Request certificate
             $this.info("Requesting Icinga 2 certificates");
-            $result = &$icingaBinary @('pki', 'request', '--host', $this.config('ca_server'), '--port', $this.config('ca_port'), '--ticket', $this.getProperty('icinga_ticket'), '--key', ($icingaPkiDir + $agentName + '.key'), '--cert',  ($icingaPkiDir + $agentName + '.crt'), '--trustedcert', ($icingaPkiDir + 'trusted-master.crt'), '--ca', ($icingaPkiDir + 'ca.crt'));
-            $this.printAndAssertResultBasedOnExitCode($result, $LASTEXITCODE);
+            $result = $this.startProcess($icingaBinary, $FALSE, 'pki request --host ' + $this.config('ca_server') + ' --port ' + $this.config('ca_port') + ' --ticket ' + $this.getProperty('icinga_ticket') + ' --key ' + $icingaPkiDir + $agentName + '.key --cert ' + $icingaPkiDir + $agentName + '.crt --trustedcert ' + $icingaPkiDir + 'trusted-master.crt --ca ' + $icingaPkiDir + 'ca.crt');
+            if ($result.Get_Item('exitcode') -ne 0) {
+                throw $result.Get_Item('message');
+            }
+            $this.info($result.Get_Item('message'));
 
             $this.setProperty('require_restart', 'true');
         } else  {
@@ -1268,9 +1318,9 @@ object ApiListener "api" {
         $icingaBinary = $this.getInstallPath() + '\sbin\icinga2.exe';
 
         if (Test-Path $icingaBinary) {
-            $output = &$icingaBinary @('daemon', '-C');
-            if ($LASTEXITCODE -ne 0) {
-                $this.error($output);
+            $result = $this.startProcess($icingaBinary, $FALSE, 'daemon -C');
+            if ($result.Get_Item('exitcode') -ne 0) {
+                $this.error($result.Get_Item('message'));
                 return $FALSE;
             }
         } else {
@@ -1690,14 +1740,14 @@ object ApiListener "api" {
                 [string]$NSClientArguments = $this.getNSClientInstallerArguments();
 
                 # Start the installer process
-                $p = Start-Process $installerPath -ArgumentList $NSClientArguments -wait -PassThru;
+                $result = $this.startProcess('MsiExec.exe', $TRUE, '/quiet /i "' + $installerPath + '" ' + $NSClientArguments);
 
-                # Exist Code 0 means the NSClient was installed successfully
+                # Exit Code 0 means the NSClient was installed successfully
                 # Otherwise we require to throw an error
-                if ($p.ExitCode -eq 0) {
-                    $this.info('NSClient++ successfully installed');
+                if ($result.Get_Item('exitcode') -ne 0) {
+                    $this.error('Failed to install NSClient++. ' + $result.Get_Item('message'));
                 } else {
-                    $this.error('Failed to install NSClient++');
+                    $this.info('NSClient++ successfully installed.');
                 }
 
                 # If defined remove the Firewall Rule to secure the system
@@ -1752,7 +1802,6 @@ object ApiListener "api" {
     #
     $installer | Add-Member -membertype ScriptMethod -name 'getNSClientInstallerArguments' -value {
         [string]$NSClientArguments = '';
-        $NSClientArguments += '/quiet';
 
         if ($this.config('nsclient_directory')) {
             $NSClientArguments += ' INSTALLLOCATION=' + $this.config('nsclient_directory');
@@ -1813,7 +1862,7 @@ object ApiListener "api" {
 
             if (Test-Path ($NSClientBinary)) {
                 $this.info('Generating all default NSClient++ config values');
-                $result = $this.startProcess($NSClientBinary, 'settings --generate --add-defaults --load-all');
+                $result = $this.startProcess($NSClientBinary, $TRUE, 'settings --generate --add-defaults --load-all');
                 if ($result.Get_Item('exitcode') -ne 0) {
                     $this.error($result.Get_Item('message'));
                 }
@@ -1926,7 +1975,7 @@ object ApiListener "api" {
 
         if ($this.isAgentInstalled()) {
             $this.info('Removing Icinga 2 Agent from the system...');
-            $result = $this.startProcess('MsiExec.exe', $this.getProperty('uninstall_id') + ' /q');
+            $result = $this.startProcess('MsiExec.exe', $TRUE, $this.getProperty('uninstall_id') + ' /q');
 
             if ($result.Get_Item('exitcode') -ne 0) {
                 $this.error($result.Get_Item('message'));
