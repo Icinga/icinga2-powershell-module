@@ -69,6 +69,31 @@ If we have created a custom user within a domain we want to use, this can be don
     exit $icinga.installMonitoringComponents();
 ```
 
+### Hand over JSON converted string to DirectorHostObject argument
+
+To simply create JSON valid strings and to hand them over to the PowerShell Module you can use
+the ConvertTo-Json function which creates JSON strings out of hashtables.
+
+**Note: ConvertTo-Json is only available on PowerShell 3.x and later. On PowerShell 2.x you will
+have to write the JSON-String yourself.**
+
+An example may look like this:
+
+```
+    $JSONObject= @{
+      'address'      = '127.0.0.1'
+      'object_name'  = '&hostname_placeholder&'
+      'display_name' = '&hostname_placeholder&'
+      'object_type'  = 'object'
+      'imports'      = ('Icinga Agent')
+    }
+
+    $icinga = Icinga2AgentModule `
+              -DirectorHostObject (ConvertTo-Json -Compress $JSONObject)
+
+    $icinga.installMonitoringComponents();
+```
+
 ### Recommended automation with Icinga Director Self Service API
 
 For more details please take a look on the [Icinga Director Automation Guide](20-Automation.md).
