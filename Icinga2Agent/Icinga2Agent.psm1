@@ -1492,6 +1492,9 @@ object CheckerComponent "checker" { }';
                         } else {
                             # Otherwise use the specified one
                             $json = $this.config('director_host_json');
+                            # Replace the host object placeholder with the hostname or the FQDN
+                            $json = $json.Replace('&hostname_placeholder&', $this.getProperty('local_hostname'));
+                            $json = $json.Replace('\u0026hostname_placeholder\u0026', $this.getProperty('local_hostname'));
                         }
 
                         $this.info('Creating host ' + $this.getProperty('local_hostname') + ' over API token inside Icinga Director.');
