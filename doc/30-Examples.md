@@ -49,6 +49,26 @@ log, simply use this function call:
 
 To disable the debug log, either set the variable to $FALSE or leave the argument empty.
 
+### Change Icinga Agent service user
+
+In some cases it might be required to run the Icinga 2 service as different user, to grant more 
+privileges to the Agent. If we want to run the Agent with the NetworkService user, we can modify
+it pretty simple:
+
+```powershell
+    $icinga = Icinga2AgentModule -IcingaServiceDetails 'NT AUTHORITY\NetworkService'
+
+    exit $icinga.installMonitoringComponents();
+```
+
+If we have created a custom user within a domain we want to use, this can be done as well:
+
+```powershell
+    $icinga = Icinga2AgentModule -IcingaServiceDetails 'icinga\jdoe:mysecretpassword'
+
+    exit $icinga.installMonitoringComponents();
+```
+
 ### Recommended automation with Icinga Director Self Service API
 
 For more details please take a look on the [Icinga Director Automation Guide](20-Automation.md).

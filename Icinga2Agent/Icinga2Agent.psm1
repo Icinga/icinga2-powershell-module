@@ -20,6 +20,7 @@ function Icinga2AgentModule {
         [array]$EndpointsConfig,
 
         # Agent installation / update
+        [string]$IcingaServiceDetails,
         [string]$DownloadUrl              = 'https://packages.icinga.com/windows/',
         [bool]$AllowUpdates               = $FALSE,
         [array]$InstallerHashes,
@@ -73,6 +74,7 @@ function Icinga2AgentModule {
         icinga_enable_debug_log = $IcingaEnableDebugLog;
         parent_endpoints        = $ParentEndpoints;
         endpoint_config         = $EndpointsConfig;
+        icinga_service_details  = $IcingaServiceDetails;
         download_url            = $DownloadUrl;
         allow_updates           = $AllowUpdates;
         installer_hashes        = $InstallerHashes;
@@ -761,20 +763,162 @@ function Icinga2AgentModule {
     }
 
     #
+    # Modify the user the Icinga services is running with
+    #
+    $installer | Add-Member -membertype ScriptMethod -name 'modifyIcingaServiceDetails' -value {
+
+        # If no user is specified -> do nothing
+        if ($this.config('icinga_service_details') -eq '') {
+            return;
+        }
+
+        [System.Object]$currentUser = Get-WMIObject win32_service -Filter "Name='icinga2'";
+        [string]$credentials = $this.config('icinga_service_details');
+        [string]$newUser = '';
+        [string]$password = 'dummy';
+
+        if ($currentUser -eq $null) {
+            $this.warn('Unable to modify Icinga service user: Service not found.');
+            return;
+        }
+
+        # Check if we defined user name and password (':' cannot appear within a username)
+        # If so split them into seperate variables, otherwise simply use the string as user
+        if ($credentials.Contains(':')) {
+            [int]$delimeter = $credentials.IndexOf(':');
+            $newUser = $credentials.Substring(0, $delimeter);
+            $password = $credentials.Substring($delimeter + 1, $credentials.Length - 1 - $delimeter);
+        } else {
+            $newUser = $credentials;
+        }
+
+        # If the user's are identical -> do nothing
+        if ($currentUser.StartName -eq $newUser) {
+            $this.info('Icinga user was not modified. Source and target service user are identical.');
+            return;
+        }
+
+        # Try to update the service name and return an error in case of a failure
+        # In the error case we do not have to deal with cleanup, as no change was made anyway
+        $this.info('Updating Icinga 2 service user to ' + $newUser);
+        $result = $this.startProcess('sc.exe', 'config icinga2 obj="' + $newUser + '" ' + 'password=' + $password);
+
+        if ($result.Get_Item('exitcode') -ne 0) {
+            $this.error($result.Get_Item('message'));
+            return;
+        }
+
+        # Just write the success message
+        $this.info($result.Get_Item('message'));
+
+        # Try to restart the service
+        $result = $this.restartService('icinga2');
+
+        # In case of an error try to rollback to the previous assigned user of the service
+        # If this fails aswell, set the user to 'LocalSystem' and restart the service to
+        # ensure that the agent is atleast running and collecting some data.
+        # Of course we throw plenty of errors to notify the user about problems
+        if ($result.Get_Item('exitcode') -ne 0) {
+            $this.error($result.Get_Item('message'));
+            $this.info('Reseting user to previous working user ' + $currentUser.StartName);
+            $result = $this.startProcess('sc.exe', 'config icinga2 obj="' + $currentUser.StartName + '" ' + 'password=' + $password);
+            $result = $this.restartService('icinga2');
+            if ($result.Get_Item('exitcode') -ne 0) {
+                $this.error('Failed to reset Icinga 2 service user to the previous user ' + $currentUser.StartName + '. Setting user to "LocalSystem" now to ensure the service integrity');
+                $result = $this.startProcess('sc.exe', 'config icinga2 obj="LocalSystem" password=dummy');
+                #$result = &sc.exe @('config', 'icinga2', 'obj=', 'LocalSystem', 'password=', 'test');
+                $this.info($result.Get_Item('message'));
+                $result = $this.restartService('icinga2');
+                if ($result.Get_Item('exitcode') -eq 0) {
+                    $this.info('Reseting Icinga 2 service user to "LocalSystem" successfull.');
+                    return;
+                } else {
+                    $this.error('Failed to rollback Icinga 2 service user to "LocalSystem": ' + $result.Get_Item('message'));
+                    return;
+                }
+            }
+        }
+
+        $this.info('Icinga 2 service is running');
+    }
+
+    #
+    # Function to make restart of services easier
+    #
+    $installer | Add-Member -membertype ScriptMethod -name 'restartService' -value {
+        param([string]$service);
+
+        $this.info('Restarting service ' + $service + '...');
+
+        # Stop the current service
+        $result = $this.startProcess("sc.exe", "stop $service");
+
+        [int]$counter = 0;
+
+        # Wait until the service is stopped
+        while ($TRUE) {
+            $serviceState = (Get-WMIObject win32_service -Filter "Name='$service'").State;
+            if ($serviceState -eq 'Stopped') {
+                break;
+            }
+            Start-Sleep -Milliseconds 100;
+            $counter += 1;
+
+            if ($counter -gt 200) {
+                $this.error('Failed to stop service ' + $service + '. Service is not responding.');
+                break;
+            }
+        }
+
+        # Start the service again
+        $result = $this.startProcess("sc.exe", "start $service");
+
+        return $result;
+    }
+
+    #
+    # Function to start processes and wait for their exit
+    # Will return a dictionary with results (message, error, exitcode)
+    #
+    $installer | Add-Member -membertype ScriptMethod -name 'startProcess' -value {
+        param([string]$executable, [string]$arguments);
+
+        $processData = New-Object System.Diagnostics.ProcessStartInfo;
+        $processData.FileName = $executable;
+        $processData.RedirectStandardError = $true;
+        $processData.RedirectStandardOutput = $true;
+        $processData.UseShellExecute = $false;
+        $processData.Arguments = $arguments;
+        $process = New-Object System.Diagnostics.Process;
+        $process.StartInfo = $processData;
+        $process.Start() | Out-Null;
+        $process.WaitForExit();
+        $stdout = $process.StandardOutput.ReadToEnd();
+        $stderr = $process.StandardError.ReadToEnd();
+        $stdout = $stdout.Replace("`n", '').Replace("`r", '');
+        $stderr = $stderr.Replace("`n", '').Replace("`r", '');
+
+        $result = @{};
+        $result.Add('message', $stdout);
+        $result.Add('error', $stderr);
+        $result.Add('exitcode', $process.ExitCode);
+
+        return $result;
+    }
+
+    #
     # Restart the Icinga 2 service and get the
     # result if the restart failed or everything
     # worked as expected
     #
     $installer | Add-Member -membertype ScriptMethod -name 'restartAgent' -value {
-        $this.info("Restarting Icinga 2 service...");
-        Restart-Service icinga2;
-        Start-Sleep -Seconds 2;
-        $service = Get-WmiObject -Class Win32_Service -Filter "Name='icinga2'"
-        if (-Not ($service.State -eq 'Running')) {
-            throw 'Failed to restart Icinga 2 service.';
-        } else {
+        $result = $this.restartService('icinga2');
+
+        if ($result.Get_Item('exitcode') -eq 0) {
             $this.info('Icinga 2 Agent successfully restarted.');
             $this.setProperty('require_restart', '');
+        } else {
+            $this.error($result.Get_Item('message'));
         }
     }
 
@@ -1705,6 +1849,10 @@ object ApiListener "api" {
             } else {
                 $this.info('No changes detected.');
             }
+
+            # We modify the service user at the very last to ensure
+            # the user we defined for logging in is valid
+            $this.modifyIcingaServiceDetails();
             return 0;
         } catch {
             $this.printLastException();

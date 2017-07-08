@@ -84,6 +84,23 @@ location.
     -ParentEndpoints 'icinga2a', 'icinga2b', 'icinga2c' -EndpointsConfig 'icinga2a.localhost;5665', '', 'icinga2c.localhost;5665'
 ```
 
+## -IcingaServiceDetails
+This argument will allow to override the user the Icinga 2 service is running with. Windows provides
+some basic users already which can be configured:
+
+* LocalSystem (Icinga default)
+* NT AUTHORITY\NetworkService
+* NT AUTHORITY\LocalService
+
+If you require an own user, you can add that one as well for the argument. If a password is required
+for the user to login, seperate username and password with a ':'.
+
+Example: jdoe:mysecretpassword
+
+Furthermore you can also use domains in combination and pass them over.
+
+Example: icinga\jdoe:mysecretpassword
+
 ## -DownloadUrl
 With this parameter you can define a download Url or local directory from which the module will 
 download/install a specific Icinga 2 Agent MSI Installer package. Please ensure to only define the 

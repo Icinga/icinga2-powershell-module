@@ -19,6 +19,10 @@ Changelog
 ### Added NSClient++ installer support
 * Added support to automaticly install and base-configure the NSClient++ from different locations
 
+### Added support for service user change
+* Added support which allows to change the user the Icinga service is running with to grant additional
+  privileges to the Agent
+
 ### Added argument for enabling / disabling debug log
 * Added support for enabling or disabling the Icinga 2 debug log with a PowerShell argument. To make this
   work, you will have to ensure the configuration is written once again with this version of the
