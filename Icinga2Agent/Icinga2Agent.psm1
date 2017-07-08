@@ -1860,6 +1860,13 @@ object ApiListener "api" {
         if ($this.config('nsclient_add_defaults')) {
             [string]$NSClientBinary = $this.getNSClientDefaultExecutablePath();
 
+            if ($NSClientBinary -eq '') {
+                $this.error('Unable to generate NSClient++ default config. Executable nscp.exe could not be found ' +
+                             'on default locations or the specified custom location. If you installed the NSClient on a ' +
+                             'custom location, please specify the path with -NSClientDirectory');
+                return;
+            }
+
             if (Test-Path ($NSClientBinary)) {
                 $this.info('Generating all default NSClient++ config values');
                 $result = $this.startProcess($NSClientBinary, $TRUE, 'settings --generate --add-defaults --load-all');
