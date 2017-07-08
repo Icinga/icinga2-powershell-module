@@ -1023,7 +1023,10 @@ library "checker"
 const PowerShellIcinga2EnableDebug = false;
 
 if (PowerShellIcinga2EnableDebug) {
-  include "features-available/debuglog.conf"
+  object FileLogger "debug-file" {
+    severity = "debug"
+    path = LocalStateDir + "/log/icinga2/debug.log"
+  }
 }
 
 if (!globals.contains("NscpPath")) {
