@@ -970,6 +970,10 @@ function Icinga2AgentModule {
         if ($flushNewLines) {
             $stdout = $stdout.Replace("`n", '').Replace("`r", '');
             $stderr = $stderr.Replace("`n", '').Replace("`r", '');
+        } else {
+            if ($stdout.Contains("`n")) {
+                $stdout = $stdout.Substring(0, $stdout.LastIndexOf("`n"));
+            }
         }
 
         $result = @{};
