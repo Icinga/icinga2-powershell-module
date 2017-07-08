@@ -1866,27 +1866,29 @@ object ApiListener "api" {
     $installer | Add-Member -membertype ScriptMethod -name 'uninstallIcinga2Agent' -value {
         $this.info('Trying to locate Icinga 2 Agent...');
 
-        [System.Object]$icingaAgent = Get-WmiObject -Class Win32_Product |
-            Where-Object {
-                $_.Name -like "Icinga 2";
-            };
+        if ($this.isAgentInstalled()) {
+            $this.info('Removing Icinga 2 Agent from the system...');
+            $result = $this.startProcess('MsiExec.exe', $this.getProperty('uninstall_id') + ' /q');
 
-        if ($icingaAgent -ne $null) {
-            [string]$icingaVersion = $icingaAgent.Version;
-            $this.info('Found Icinga 2 Agent version ' + $icingaVersion + '. Starting uninstaller process');
-            $icingaAgent.Uninstall() | Out-Null;
+            if ($result.Get_Item('exitcode') -ne 0) {
+                $this.error($result.Get_Item('message'));
+                return [int]$result.Get_Item('exitcode');
+            }
+
             $this.info('Icinga 2 Agent successfully removed.');
-        } else {
-            $this.warn('Icinga 2 Agent could not be found on the system.');
         }
 
         if ($this.config('full_uninstallation')) {
             $this.info('Flushing Icinga 2 program data directory...');
             if (Test-Path ($Env:ProgramData + '\icinga2\')) {
-                $this.info('Removing downloaded Icinga 2 Agent installer');
-                [System.Object]$folder = New-Object -ComObject Scripting.FileSystemObject;
-                $folder.DeleteFolder($Env:ProgramData + '\icinga2');
-                $this.info('Remaining Icinga 2 configuration successfully removed.');
+                try {
+                    [System.Object]$folder = New-Object -ComObject Scripting.FileSystemObject;
+                    $folder.DeleteFolder($Env:ProgramData + '\icinga2');
+                    $this.info('Remaining Icinga 2 configuration successfully removed.');
+                } catch {
+                    $this.error('Failed to delete Icinga 2 Program Data Directory: ' + $_.Exception.Message);
+                    return 1;
+                }
             } else {
                 $this.warn('Icinga 2 Agent program directory not present.');
             }
