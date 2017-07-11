@@ -134,6 +134,9 @@ The **&hostname_placeholder&** variable is replaced automaticly with the Agents 
 easier for us. As we are using the FQDN, we also got our IP Adress automaticly. Once done, the 
 Icinga Director will also deploy the configuration immediately and the monitoring is ready.
 
+Take a look on the [placeholders description](31-Placeholders.md) to get to know about additional
+available values.
+
 ```powershell
     $icinga = Icinga2AgentModule `
               -InstallAgentVersion  '2.6.3' `

@@ -1440,6 +1440,13 @@ object ApiListener "api" {
             $this.info('Setting internal Agent Name to ' + $this.getProperty('local_hostname'));
         }
 
+         # Add additional variables to our config for more user-friendly usage
+        [string]$host_fqdn = (Get-WmiObject win32_computersystem).DNSHostName + '.' + (Get-WmiObject win32_computersystem).Domain;
+        [string]$hostname = (Get-WmiObject win32_computersystem).DNSHostName;
+
+        $this.setProperty('fqdn', $host_fqdn);
+        $this.setProperty('hostname', $hostname);
+
         if (-Not $this.getProperty('local_hostname')) {
             $this.warn('You have not specified an Agent Name or turned on to auto fetch this information.');
         }
@@ -1502,6 +1509,78 @@ object ApiListener "api" {
     }
 
     #
+    # Allow the replacing of placeholders within a JSON-String
+    #
+    $installer | Add-Member -MemberType ScriptMethod -name 'doReplaceJSONPlaceholders' -Value {
+        param([string]$jsonString);
+
+        # Replace the encoded & with the original symbol at first
+        $jsonString = $jsonString.Replace('\u0026', '&');
+
+        # &hostname& => hostname
+        $jsonString = $jsonString.Replace('&hostname&', $this.getProperty('hostname'));
+
+        # &hostname.lowerCase& => hostname to lower
+        $jsonString = $jsonString.Replace('&hostname.lowerCase&', $this.getProperty('hostname').ToLower());
+
+        # &hostname.upperCase& => hostname to upper
+        $jsonString = $jsonString.Replace('&hostname.upperCase&', $this.getProperty('hostname').ToUpper());
+
+        # &fqdn& => fqdn
+        $jsonString = $jsonString.Replace('&fqdn&', $this.getProperty('fqdn'));
+
+        # &fqdn.lowerCase& => fqdn to lower
+        $jsonString = $jsonString.Replace('&fqdn.lowerCase&', $this.getProperty('fqdn').ToLower());
+
+        # &fqdn.upperCase& => fqdn to upper
+        $jsonString = $jsonString.Replace('&fqdn.upperCase&', $this.getProperty('fqdn').ToUpper());
+
+        # hostname_placeholder => current hostname (either FQDN, hostname, with plain, upper or lower case)
+        $jsonString = $jsonString.Replace('&hostname_placeholder&', $this.getProperty('local_hostname'));
+
+        # Try to replace our IP-Address
+        if ($jsonString.Contains('&ipaddressV6')) {
+            $jsonString = $this.doReplaceJSONIPAddress($jsonString, 'ipaddressV6');
+        } elseif ($jsonString.Contains('&ipaddress')) {
+            $jsonString = $this.doReplaceJSONIPAddress($jsonString, 'ipaddress');
+        }
+
+        # Encode the & again to receive a proper JSON
+        $jsonString = $jsonString.Replace('&', '\u0026');
+
+        return $jsonString;
+    }
+
+    #
+    # Allow the replacing of added IPv4 and IPv6 address
+    #
+    $installer | Add-Member -MemberType ScriptMethod -name 'doReplaceJSONIPAddress' -Value {
+        param([string]$jsonString, [string]$ipType);
+
+        # Add our & delimeter to begin with
+        [string]$ipSearchPattern = '&' + $ipType;
+
+        # Now locate the string and cut everything away until only our & tag for the string shall be remaining, including the array placeholder
+        [string]$ipAddressEnd = $jsonString.Substring($jsonString.IndexOf($ipSearchPattern) + $ipType.Length + 1, $jsonString.Length - $jsonString.IndexOf($ipSearchPattern) - $ipType.Length - 1);
+        # Ensure we still got an ending &, otherwise throw an error
+        if ($ipAddressEnd.Contains('&')) {
+            # Now cut everything until the first & we found
+            $ipAddressEnd = $ipAddressEnd.Substring(0, $ipAddressEnd.IndexOf('&'));
+            # Build together our IP-Address string, which could be for example ipaddress[1]
+            [string]$ipAddressString = $ipType + $ipAddressEnd;
+
+            # Now replace this finding with our config attribute
+            $jsonString = $jsonString.Replace('&' + $ipAddressString + '&', $this.getProperty($ipAddressString));
+        } else {
+            # If something goes wrong we require to notify our user
+            $this.error('Failed to replace IP-Address placeholder. Invalid format for IP-Type ' + $ipType);
+        }
+
+        # Return our new JSON-String
+        return $jsonString;
+    }
+
+    #
     # This function will allow us to create a
     # host object directly inside the Icinga Director
     # with a provided JSON string
@@ -1520,11 +1599,8 @@ object ApiListener "api" {
                             [string]$hostname = $this.getProperty('local_hostname');
                             $json = '{ "address": "' + $hostname + '", "display_name": "' + $hostname + '" }';
                         } else {
-                            # Otherwise use the specified one
-                            $json = $this.config('director_host_json');
-                            # Replace the host object placeholder with the hostname or the FQDN
-                            $json = $json.Replace('&hostname_placeholder&', $this.getProperty('local_hostname'));
-                            $json = $json.Replace('\u0026hostname_placeholder\u0026', $this.getProperty('local_hostname'));
+                            # Otherwise use the specified one and replace the host object placeholders
+                            $json = $this.doReplaceJSONPlaceholders($this.config('director_host_json'));
                         }
 
                         $this.info('Creating host ' + $this.getProperty('local_hostname') + ' over API token inside Icinga Director.');
@@ -1546,9 +1622,8 @@ object ApiListener "api" {
             } elseif ($this.config('director_host_json'))  {
                 # Setup the url we need to call
                 [string]$url = $this.config('director_url') + 'host';
-                # Replace the host object placeholder with the hostname or the FQDN
-                [string]$host_object_json = $this.config('director_host_json').Replace('&hostname_placeholder&', $this.getProperty('local_hostname'));
-                $host_object_json = $host_object_json.Replace('\u0026hostname_placeholder\u0026', $this.getProperty('local_hostname'));
+                # Replace the host object placeholders
+                [string]$host_object_json = $this.doReplaceJSONPlaceholders($this.config('director_host_json'));
                 # Create the host object inside the director
                 [string]$httpResponse = $this.createHTTPRequest($url, $host_object_json, 'PUT', 'application/json', $FALSE, $FALSE);
 
