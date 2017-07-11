@@ -2131,15 +2131,14 @@ object ApiListener "api" {
                 $this.info('Icinga 2 certificates already exist. Nothing to do.');
             }
 
-            $this.generateIcingaConfiguration();
-            $this.applyPossibleConfigChanges();
-            $this.switchIcingaDebugLog();
-            $this.installIcingaAgentFirewallRule();
-
             if ($this.shouldFlushIcingaApiDirectory()) {
                 $this.flushIcingaApiDirectory();
             }
 
+            $this.generateIcingaConfiguration();
+            $this.applyPossibleConfigChanges();
+            $this.switchIcingaDebugLog();
+            $this.installIcingaAgentFirewallRule();
             $this.installNSClient();
 
             if ($this.madeChanges()) {
