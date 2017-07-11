@@ -959,7 +959,7 @@ function Icinga2AgentModule {
         $result = $this.startProcess("sc.exe", $TRUE, "start $service");
 
         # Wait until the service is started
-        if ($this.waitForServiceToReachState($service, 'Started') -eq $FALSE) {
+        if ($this.waitForServiceToReachState($service, 'Running') -eq $FALSE) {
             $result.Set_Item('message', 'Failed to restart service ' + $service + '.');
             $result.Set_Item('exitcode', '1');
         }
