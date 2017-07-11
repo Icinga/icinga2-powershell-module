@@ -1015,9 +1015,10 @@ function Icinga2AgentModule {
         $process = New-Object System.Diagnostics.Process;
         $process.StartInfo = $processData;
         $process.Start() | Out-Null;
-        $process.WaitForExit();
         $stdout = $process.StandardOutput.ReadToEnd();
         $stderr = $process.StandardError.ReadToEnd();
+        $process.WaitForExit();
+
         if ($flushNewLines) {
             $stdout = $stdout.Replace("`n", '').Replace("`r", '');
             $stderr = $stderr.Replace("`n", '').Replace("`r", '');
