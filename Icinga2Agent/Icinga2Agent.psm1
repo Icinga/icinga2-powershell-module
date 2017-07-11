@@ -1450,6 +1450,40 @@ object CheckerComponent "checker" { }';
     }
 
     #
+    # Retreive the current IP-Address of the Host
+    #
+    $installer | Add-Member -membertype ScriptMethod -name 'fetchHostIPAddress' -value {
+        try {
+            [array]$ipAddressArray = [Net.DNS]::GetHostEntry("").AddressList;
+            [int]$ipV4Index = 0;
+            [int]$ipV6Index = 0;
+            foreach ($address in $ipAddressArray) {
+                # Split config attributes for IPv4 and IPv6 into different values
+                if ($address.AddressFamily -eq 'InterNetwork') { #IPv4
+                    # If the first entry of our default ipaddress is empty -> add it
+                    if ($this.getProperty('ipaddress') -eq $null) {
+                        $this.setProperty('ipaddress', $address);
+                    }
+                    # Now add the IP's with an array like construct
+                    $this.setProperty('ipaddress[' + $ipV4Index + ']', $address);
+                    $ipV4Index += 1;
+                } else { #IPv6
+                    # If the first entry of our default ipaddress is empty -> add it
+                    if ($this.getProperty('ipaddressV6') -eq $null) {
+                        $this.setProperty('ipaddressV6', $address);
+                    }
+                    # Now add the IP's with an array like construct
+                    $this.setProperty('ipaddressV6[' + $ipV6Index + ']', $address);
+                    $ipV6Index += 1;
+                }
+            }
+        } catch {
+            # Write an error in case something went wrong
+            $this.error('Failed to lookup IP-Address with DNS-Lookup for ' + $hostname + ': ' + $_.Exception.Message);
+        }
+    }
+
+    #
     # Transform the hostname to upper or lower case if required
     # 0: Do nothing (default)
     # 1: Transform to lower case
@@ -1931,6 +1965,8 @@ object CheckerComponent "checker" { }';
             $this.readHostAPIKeyFromDisk();
             # Get host name or FQDN if required
             $this.fetchHostnameOrFQDN();
+            # Get IP-Address of host
+            $this.fetchHostIPAddress();
             # Transform the hostname if required
             $this.doTransformHostname();
             # Try to create a host object inside the Icinga Director
