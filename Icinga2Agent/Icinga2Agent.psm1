@@ -996,6 +996,13 @@ function Icinga2AgentModule {
             }
         }
 
+        # Wait one second and check the status again to ensure it remains within it's state
+        Start-Sleep -Seconds 1;
+
+        if ($state -ne (Get-WMIObject win32_service -Filter "Name='$service'").State) {
+            return $FALSE;
+        }
+
         return $TRUE;
     }
 
