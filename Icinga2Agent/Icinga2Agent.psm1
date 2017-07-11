@@ -8,14 +8,16 @@ function Icinga2AgentModule {
         [string]$AgentName,
         [string]$Ticket,
         [string]$InstallAgentVersion,
-        [bool]$FetchAgentName            = $FALSE,
-        [bool]$FetchAgentFQDN            = $FALSE,
-        [int]$TransformHostname          = 0,
+        [bool]$FetchAgentName             = $FALSE,
+        [bool]$FetchAgentFQDN             = $FALSE,
+        [int]$TransformHostname           = 0,
 
         # Agent configuration
+        [int]$AgentListenPort             = 5665,
         [string]$ParentZone,
         [bool]$AcceptConfig               = $TRUE,
         [bool]$IcingaEnableDebugLog       = $FALSE,
+        [bool]$AgentAddFirewallRule       = $FALSE,
         [array]$ParentEndpoints,
         [array]$EndpointsConfig,
 
@@ -69,9 +71,11 @@ function Icinga2AgentModule {
         fetch_agent_name        = $FetchAgentName;
         fetch_agent_fqdn        = $FetchAgentFQDN;
         transform_hostname      = $TransformHostname;
+        agent_listen_port       = $AgentListenPort;
         parent_zone             = $ParentZone;
         accept_config           = $AcceptConfig;
         icinga_enable_debug_log = $IcingaEnableDebugLog;
+        agent_add_firewall_rule = $AgentAddFirewallRule;
         parent_endpoints        = $ParentEndpoints;
         endpoint_config         = $EndpointsConfig;
         icinga_service_user     = $IcingaServiceUser;
@@ -713,6 +717,53 @@ function Icinga2AgentModule {
     }
 
     #
+    # Ensure we are able to install a firewall rule for the Icinga 2 Agent,
+    # allowing masters and satellites to connect to our local agent
+    #
+    $installer | Add-Member -membertype ScriptMethod -name 'installIcingaAgentFirewallRule' -value {
+        if ($this.config('agent_add_firewall_rule') -eq $FALSE) {
+            $this.warn('Icinga 2 Agent Firewall Rule will not be installed.');
+            return;
+        }
+
+        $this.info('Trying to install Icinga 2 Agent Firewall Rule for port ' + $this.config('agent_listen_port'));
+
+        $result = $this.startProcess('netsh', $FALSE, 'advfirewall firewall show rule name="Icinga 2 Agent Inbound by PS-Module"');
+        if ($result.Get_Item('exitcode') -eq 0) {
+            # Firewall rule is already defined -> delete it and add it again
+
+            $this.info('Icinga 2 Agent Firewall Rule already installed. Trying to remove it to add it again...');
+            $result = $this.startProcess('netsh', $TRUE, 'advfirewall firewall delete rule name="Icinga 2 Agent Inbound by PS-Module"');
+
+            if ($result.Get_Item('exitcode') -ne 0) {
+                $this.error('Failed to remove Icinga 2 Agent Firewall rule before adding it again: ' + $result.Get_Item('message'));
+                return;
+            } else {
+                $this.info('Icinga 2 Agent Firewall Rule has been removed. Re-Adding now...');
+            }
+        }
+
+        [string]$argument = 'advfirewall firewall add rule'
+        $argument = $argument + ' dir=in action=allow program="' + $this.getInstallPath() + 'sbin\icinga2.exe"';
+        $argument = $argument + ' name="Icinga 2 Agent Inbound by PS-Module"';
+        $argument = $argument + ' description="Inbound Firewall Rule to allow Icinga 2 masters/satellites to connect to the Icinga 2 Agent installed on this system."';
+        $argument = $argument + ' enable=yes';
+        $argument = $argument + ' remoteip=any';
+        $argument = $argument + ' localip=any';
+        $argument = $argument + ' localport=' + $this.config('agent_listen_port');
+        $argument = $argument + ' protocol=tcp';
+
+        $result = $this.startProcess('netsh', $FALSE, $argument);
+        if ($result.Get_Item('exitcode') -ne 0) {
+            # Firewall rule was not added -> print error
+            $this.error('Failed to install Icinga 2 Agent Firewall: ' + $result.Get_Item('message'));
+            return;
+        }
+
+        $this.info('Icinga 2 Agent Firewall Rule successfully installed for port ' + $this.config('agent_listen_port'));
+    }
+
+    #
     # Get the default path or our custom path for the NSClient++
     #
     $installer | Add-Member -membertype ScriptMethod -name 'getNSClientDefaultExecutablePath' -value {
@@ -1054,6 +1105,8 @@ object ApiListener "api" {
   ca_path = SysconfDir + "/icinga2/pki/ca.crt"
   accept_commands = true
   accept_config = ' + $this.convertBoolToString($this.config('accept_config')) + '
+  bind_host = "::"
+  bind_port = ' + [int]$this.config('agent_listen_port') + '
 }';
 
             $this.setProperty('new_icinga_config', $icingaNewConfig);
@@ -2080,6 +2133,7 @@ object ApiListener "api" {
             $this.generateIcingaConfiguration();
             $this.applyPossibleConfigChanges();
             $this.switchIcingaDebugLog();
+            $this.installIcingaAgentFirewallRule();
 
             if ($this.shouldFlushIcingaApiDirectory()) {
                 $this.flushIcingaApiDirectory();
