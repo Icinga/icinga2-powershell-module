@@ -5,8 +5,8 @@ Changelog
 -----
 
 ### Fixed issues and related features
-* You can find issues and feature requests related to this release on our [roadmap]
-(https://github.com/Icinga/icinga2-powershell-module/milestone/1?closed=1)
+* You can find issues and feature requests related to this release on our
+[roadmap](https://github.com/Icinga/icinga2-powershell-module/milestone/1?closed=1)
 
 ### Breaking Change with -DirectorUrl
 * The argument -DirectorUrl is now explicit (https://icinga2-master.example.com/icingaweb2/director/)
