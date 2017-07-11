@@ -84,7 +84,7 @@ location.
     -ParentEndpoints 'icinga2a', 'icinga2b', 'icinga2c' -EndpointsConfig 'icinga2a.localhost;5665', '', 'icinga2c.localhost;5665'
 ```
 
-## -IcingaServiceDetails
+## -IcingaServiceUser
 This argument will allow to override the user the Icinga 2 service is running with. Windows provides
 some basic users already which can be configured:
 

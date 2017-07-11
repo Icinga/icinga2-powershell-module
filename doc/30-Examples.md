@@ -56,7 +56,7 @@ privileges to the Agent. If we want to run the Agent with the NetworkService use
 it pretty simple:
 
 ```powershell
-    $icinga = Icinga2AgentModule -IcingaServiceDetails 'NT AUTHORITY\NetworkService'
+    $icinga = Icinga2AgentModule -IcingaServiceUser 'NT AUTHORITY\NetworkService'
 
     exit $icinga.installMonitoringComponents();
 ```
@@ -64,7 +64,7 @@ it pretty simple:
 If we have created a custom user within a domain we want to use, this can be done as well:
 
 ```powershell
-    $icinga = Icinga2AgentModule -IcingaServiceDetails 'icinga\jdoe:mysecretpassword'
+    $icinga = Icinga2AgentModule -IcingaServiceUser 'icinga\jdoe:mysecretpassword'
 
     exit $icinga.installMonitoringComponents();
 ```

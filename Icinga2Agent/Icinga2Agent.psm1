@@ -20,7 +20,7 @@ function Icinga2AgentModule {
         [array]$EndpointsConfig,
 
         # Agent installation / update
-        [string]$IcingaServiceDetails,
+        [string]$IcingaServiceUser,
         [string]$DownloadUrl              = 'https://packages.icinga.com/windows/',
         [bool]$AllowUpdates               = $FALSE,
         [array]$InstallerHashes,
@@ -74,7 +74,7 @@ function Icinga2AgentModule {
         icinga_enable_debug_log = $IcingaEnableDebugLog;
         parent_endpoints        = $ParentEndpoints;
         endpoint_config         = $EndpointsConfig;
-        icinga_service_details  = $IcingaServiceDetails;
+        icinga_service_user     = $IcingaServiceUser;
         download_url            = $DownloadUrl;
         allow_updates           = $AllowUpdates;
         installer_hashes        = $InstallerHashes;
@@ -814,15 +814,15 @@ function Icinga2AgentModule {
     #
     # Modify the user the Icinga services is running with
     #
-    $installer | Add-Member -membertype ScriptMethod -name 'modifyIcingaServiceDetails' -value {
+    $installer | Add-Member -membertype ScriptMethod -name 'modifyIcingaServiceUser' -value {
 
         # If no user is specified -> do nothing
-        if ($this.config('icinga_service_details') -eq '') {
+        if ($this.config('icinga_service_user') -eq '') {
             return;
         }
 
         [System.Object]$currentUser = Get-WMIObject win32_service -Filter "Name='icinga2'";
-        [string]$credentials = $this.config('icinga_service_details');
+        [string]$credentials = $this.config('icinga_service_user');
         [string]$newUser = '';
         [string]$password = 'dummy';
 
@@ -1988,7 +1988,7 @@ object CheckerComponent "checker" { }';
 
             # We modify the service user at the very last to ensure
             # the user we defined for logging in is valid
-            $this.modifyIcingaServiceDetails();
+            $this.modifyIcingaServiceUser();
             return 0;
         } catch {
             $this.printLastException();
