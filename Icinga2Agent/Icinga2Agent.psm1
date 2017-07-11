@@ -1441,8 +1441,7 @@ object ApiListener "api" {
     $installer | Add-Member -membertype ScriptMethod -name 'switchIcingaDebugLog' -value {
         # In case the config is not valid -> do nothing
         if (-Not $this.isIcingaConfigValid($FALSE)) {
-            $this.error('Unable to process Icinga 2 debug configuration. The icinga2.conf is corrupt!');
-            return;
+            throw 'Unable to process Icinga 2 debug configuration. The icinga2.conf is corrupt! Please check the icinga2.log';
         }
 
         # If there is no config file defined -> do nothing
@@ -1479,7 +1478,7 @@ object ApiListener "api" {
                 # if not write the old configuration again
                 $this.writeConfig($icingaCurrentConfig);
                 if (-Not $this.isIcingaConfigValid($FALSE)) {
-                    throw 'Critical exception: Something went wrong while processing debug configuration. The Icinga 2 config is corrupt!';
+                    throw 'Critical exception: Something went wrong while processing debug configuration. The Icinga 2 config is corrupt!  Please check the icinga2.log';
                 }
             }
         }
