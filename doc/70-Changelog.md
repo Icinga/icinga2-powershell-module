@@ -4,6 +4,10 @@ Changelog
 1.0.0
 -----
 
+### Fixed issues and related features
+* You can find issues and feature requests related to this release on our [roadmap]
+(https://github.com/Icinga/icinga2-powershell-module/milestone/1?closed=1)
+
 ### Breaking Change with -DirectorUrl
 * The argument -DirectorUrl is now explicit (https://icinga2-master.example.com/icingaweb2/director/)
   and no longer implicit. Be aware to update your scripts to work with this version!
@@ -28,8 +32,8 @@ Changelog
   work, you will have to ensure the configuration is written once again with this version of the
   PowerShell module. Otherwise the argument will not work.
 
-### Various fixes and improvements
-* Fixed several issues and added missing features / handlings to the module
+### Added support to add inbound firewall rule
+* The PowerShell module now allows to open an inbound firewall rule, allowing the connection to the Agent
 
 ### Documentation
 * Updated documentation for all arguments and added additional examples and use-cases
