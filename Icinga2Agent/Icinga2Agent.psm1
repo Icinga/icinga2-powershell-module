@@ -1018,8 +1018,6 @@ include <plugins>
 include <nscp>
 include <windows-plugins>
 
-library "checker"
-
 const PowerShellIcinga2EnableDebug = false;
 
 if (PowerShellIcinga2EnableDebug) {
@@ -1056,9 +1054,7 @@ object ApiListener "api" {
   ca_path = SysconfDir + "/icinga2/pki/ca.crt"
   accept_commands = true
   accept_config = ' + $this.convertBoolToString($this.config('accept_config')) + '
-}
-
-object CheckerComponent "checker" { }';
+}';
 
             $this.setProperty('new_icinga_config', $icingaNewConfig);
             $this.setProperty('old_icinga_config', $icingaCurrentConfig);
