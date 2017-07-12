@@ -1516,33 +1516,69 @@ object ApiListener "api" {
     # Retreive the current IP-Address of the Host
     #
     $installer | Add-Member -membertype ScriptMethod -name 'fetchHostIPAddress' -value {
+
+        # First try to lookup the IP by the FQDN
+        if ($this.doLookupIPAddressesForHostname($this.getProperty('fqdn'))) {
+            return;
+        }
+
+        # Now take a look for the given hostname
+        if ($this.doLookupIPAddressesForHostname($this.getProperty('hostname'))) {
+            return;
+        }
+
+        # If still nothing is found, look on the entire host
+        if ($this.doLookupIPAddressesForHostname("")) {
+            return;
+        }
+    }
+
+    #
+    # Add all found IP-Addresses to our property array
+    #
+    $installer | Add-Member -membertype ScriptMethod -name 'doLookupIPAddressesForHostname' -value {
+        param([string]$hostname);
+
+        $this.info('Trying to fetch Host IP-Address for hostname: ' + $hostname);
         try {
-            [array]$ipAddressArray = [Net.DNS]::GetHostEntry("").AddressList;
-            [int]$ipV4Index = 0;
-            [int]$ipV6Index = 0;
-            foreach ($address in $ipAddressArray) {
-                # Split config attributes for IPv4 and IPv6 into different values
-                if ($address.AddressFamily -eq 'InterNetwork') { #IPv4
-                    # If the first entry of our default ipaddress is empty -> add it
-                    if ($this.getProperty('ipaddress') -eq $null) {
-                        $this.setProperty('ipaddress', $address);
-                    }
-                    # Now add the IP's with an array like construct
-                    $this.setProperty('ipaddress[' + $ipV4Index + ']', $address);
-                    $ipV4Index += 1;
-                } else { #IPv6
-                    # If the first entry of our default ipaddress is empty -> add it
-                    if ($this.getProperty('ipaddressV6') -eq $null) {
-                        $this.setProperty('ipaddressV6', $address);
-                    }
-                    # Now add the IP's with an array like construct
-                    $this.setProperty('ipaddressV6[' + $ipV6Index + ']', $address);
-                    $ipV6Index += 1;
-                }
-            }
+            [array]$ipAddressArray = [Net.DNS]::GetHostEntry($hostname).AddressList;
+            $this.addHostIPAddressToProperties($ipAddressArray);
+            return $TRUE;
         } catch {
             # Write an error in case something went wrong
             $this.error('Failed to lookup IP-Address with DNS-Lookup for ' + $hostname + ': ' + $_.Exception.Message);
+        }
+        return $FALSE;
+    }
+
+    #
+    # Add all found IP-Addresses to our property array
+    #
+    $installer | Add-Member -membertype ScriptMethod -name 'addHostIPAddressToProperties' -value {
+        param($ipArray);
+
+        [int]$ipV4Index = 0;
+        [int]$ipV6Index = 0;
+
+        foreach ($address in $ipArray) {
+            # Split config attributes for IPv4 and IPv6 into different values
+            if ($address.AddressFamily -eq 'InterNetwork') { #IPv4
+                # If the first entry of our default ipaddress is empty -> add it
+                if ($this.getProperty('ipaddress') -eq $null) {
+                    $this.setProperty('ipaddress', $address);
+                }
+                # Now add the IP's with an array like construct
+                $this.setProperty('ipaddress[' + $ipV4Index + ']', $address);
+                $ipV4Index += 1;
+            } else { #IPv6
+                # If the first entry of our default ipaddress is empty -> add it
+                if ($this.getProperty('ipaddressV6') -eq $null) {
+                    $this.setProperty('ipaddressV6', $address);
+                }
+                # Now add the IP's with an array like construct
+                $this.setProperty('ipaddressV6[' + $ipV6Index + ']', $address);
+                $ipV6Index += 1;
+            }
         }
     }
 
