@@ -533,7 +533,7 @@ function Icinga2AgentModule {
 
         return $TRUE;
     }
-    
+
     #
     # We could try to install the Agent from a local directory
     #
