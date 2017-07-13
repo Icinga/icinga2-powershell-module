@@ -20,6 +20,7 @@ function Icinga2AgentModule {
         [bool]$AgentAddFirewallRule       = $FALSE,
         [array]$ParentEndpoints,
         [array]$EndpointsConfig,
+        [array]$GlobalZones,
 
         # Agent installation / update
         [string]$IcingaServiceUser,
@@ -78,6 +79,7 @@ function Icinga2AgentModule {
         agent_add_firewall_rule = $AgentAddFirewallRule;
         parent_endpoints        = $ParentEndpoints;
         endpoint_config         = $EndpointsConfig;
+        global_zones            = $GlobalZones;
         icinga_service_user     = $IcingaServiceUser;
         download_url            = $DownloadUrl;
         allow_updates           = $AllowUpdates;
@@ -285,8 +287,8 @@ function Icinga2AgentModule {
         $this.setProperty('api_dir', $Env:ProgramData + '\icinga2\var\lib\icinga2\api');
         $this.setProperty('icinga_ticket', $this.config('ticket'));
         $this.setProperty('local_hostname', $this.config('agent_name'));
-        # Generate endpoint nodes based on input parameters
-        $this.generateEndpointNodes();
+        # Ensure we generate the required configuration content
+        $this.generateConfigContent();
     }
 
     #
@@ -372,6 +374,40 @@ function Icinga2AgentModule {
         } else {
             $this.setProperty('generate_config', 'false');
         }
+    }
+
+    #
+    # Generate global zones by configuration
+    #
+    $installer | Add-Member -membertype ScriptMethod -name 'generateGlobalZones' -value {
+
+        # Load all configured global zones
+        [array]$global_zones = $this.config('global_zones');
+        # Add director-global zone as default - always
+        [string]$zones = 'object Zone "director-global" {' + "`n" + ' global = true' + "`n" + '}' + "`n";
+
+        # In case no zones are given, simply add director-global
+        if ($global_zones -eq $NULL) {
+            $this.setProperty('global_zones', $zones);
+            return;
+        }
+
+        # Loop through all given zones and add them to our configuration
+        foreach ($zone in $global_zones) {
+            # Ignore possible configured director-global zone, as already present
+            if ($zone -ne 'director-global') {
+                $zones = $zones + 'object Zone "' + $zone + '" {' + "`n" + ' global = true' + "`n" + '}' + "`n";
+            }
+        }
+        $this.setProperty('global_zones', $zones);
+    }
+
+    #
+    # Generate default config values
+    #
+    $installer | Add-Member -membertype ScriptMethod -name 'generateConfigContent' -value {
+        $this.generateEndpointNodes();
+        $this.generateGlobalZones();
     }
 
     #
@@ -1099,9 +1135,8 @@ object Endpoint "' + $this.getProperty('local_hostname') + '" {}
 object Zone "' + $this.config('parent_zone') + '" {
   endpoints = [ ' + $this.getProperty('endpoint_nodes') +' ]
 }
-object Zone "director-global" {
-  global = true
-}
+
+' + $this.getProperty('global_zones') + '
 object Zone "' + $this.getProperty('local_hostname') + '" {
   parent = "' + $this.config('parent_zone') + '"
   endpoints = [ "' + $this.getProperty('local_hostname') + '" ]
@@ -1890,8 +1925,8 @@ object ApiListener "api" {
             } else {
                 $this.error('Received ' + $argumentString + ' from Icinga Director. Possibly your API token is no longer valid or the object does not exist.');
             }
-            # Ensure we generate the required configuration for our endpoints
-            $this.generateEndpointNodes();
+            # Ensure we generate the required configuration content
+            $this.generateConfigContent();
         }
     }
 

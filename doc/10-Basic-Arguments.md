@@ -100,6 +100,17 @@ location.
     -ParentEndpoints 'icinga2a', 'icinga2b', 'icinga2c' -EndpointsConfig 'icinga2a.localhost;5665', '', 'icinga2c.localhost;5665'
 ```
 
+## -GlobalZones
+
+Allows to specify additional global zones, which will be added into the icinga2.conf.
+
+**Note:** The ***director-global*** conf will be added automaticly and does not require to be included
+
+**Example:**
+```powershell
+    -GlobalZones 'global-linux', 'global-windows', 'global-commands'
+```
+
 ## -IcingaServiceUser
 
 This argument will allow to override the user the Icinga 2 service is running with. Windows provides
