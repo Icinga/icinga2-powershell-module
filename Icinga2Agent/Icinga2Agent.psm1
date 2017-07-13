@@ -84,7 +84,7 @@ function Icinga2AgentModule {
         download_url            = $DownloadUrl;
         allow_updates           = $AllowUpdates;
         installer_hashes        = $InstallerHashes;
-        flush_api_dir           = $FlushApiDirectory;
+        flush_api_directory     = $FlushApiDirectory;
         ca_server               = $CAServer;
         ca_port                 = $CAPort;
         force_cert              = $ForceCertificateGeneration;
@@ -94,7 +94,7 @@ function Icinga2AgentModule {
         director_password       = $DirectorPassword;
         director_domain         = $DirectorDomain;
         director_auth_token     = $DirectorAuthToken;
-        director_host_json      = $DirectorHostObject;
+        director_host_object    = $DirectorHostObject;
         director_deploy_config  = $DirectorDeployConfig;
         install_nsclient        = $InstallNSClient;
         nsclient_add_defaults   = $NSClientAddDefaults;
@@ -882,7 +882,7 @@ function Icinga2AgentModule {
     # -RemoveApiDirectory argument of the function builder
     #
     $installer | Add-Member -membertype ScriptMethod -name 'shouldFlushIcingaApiDirectory' -value {
-        return $this.config('flush_api_dir');
+        return $this.config('flush_api_directory');
     }
 
     #
@@ -1726,12 +1726,12 @@ object ApiListener "api" {
                         [string]$url = $this.config('director_url') + 'self-service/register-host?name=' + $this.getProperty('local_hostname') + '&key=' + $apiKey;
                         [string]$json = '';
                         # If no JSON Object is defined (should be default), we shall create one
-                        if (-Not $this.config('director_host_json')) {
+                        if (-Not $this.config('director_host_object')) {
                             [string]$hostname = $this.getProperty('local_hostname');
                             $json = '{ "address": "' + $hostname + '", "display_name": "' + $hostname + '" }';
                         } else {
                             # Otherwise use the specified one and replace the host object placeholders
-                            $json = $this.doReplaceJSONPlaceholders($this.config('director_host_json'));
+                            $json = $this.doReplaceJSONPlaceholders($this.config('director_host_object'));
                         }
 
                         $this.info('Creating host ' + $this.getProperty('local_hostname') + ' over API token inside Icinga Director.');
@@ -1750,11 +1750,11 @@ object ApiListener "api" {
                         }
                     }
                 }
-            } elseif ($this.config('director_host_json'))  {
+            } elseif ($this.config('director_host_object'))  {
                 # Setup the url we need to call
                 [string]$url = $this.config('director_url') + 'host';
                 # Replace the host object placeholders
-                [string]$host_object_json = $this.doReplaceJSONPlaceholders($this.config('director_host_json'));
+                [string]$host_object_json = $this.doReplaceJSONPlaceholders($this.config('director_host_object'));
                 # Create the host object inside the director
                 [string]$httpResponse = $this.createHTTPRequest($url, $host_object_json, 'PUT', 'application/json', $FALSE, $FALSE);
 
