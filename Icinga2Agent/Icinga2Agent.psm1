@@ -1261,7 +1261,7 @@ object ApiListener "api" {
     $installer | Add-Member -membertype ScriptMethod -name 'generateCertificates' -value {
 
         if ($this.getProperty('local_hostname') -And $this.config('ca_server') -And $this.getProperty('icinga_ticket')) {
-            [string]$icingaPkiDir = Join-Path -Path $this.getProperty('config_dir') -ChildPath 'pki';
+            [string]$icingaPkiDir = Join-Path -Path $this.getProperty('config_dir') -ChildPath 'pki\';
             [string]$icingaBinary = Join-Path -Path $this.getInstallPath() -ChildPath 'sbin\icinga2.exe';
             [string]$agentName = $this.getProperty('local_hostname');
 
