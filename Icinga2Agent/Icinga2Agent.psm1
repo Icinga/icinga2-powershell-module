@@ -1464,10 +1464,21 @@ object ApiListener "api" {
         }
 
         if (-Not $this.config('download_url') -And -Not $this.config('agent_version')) {
+            $this.warn('Icinga 2 Agent will not be installed. Arguments -DownloadUrl and -InstallAgentVersion both not defined.');
             return $FALSE;
         }
 
-        $this.exception('Failed to install Icinga 2 Agent. Either both arguments -DownloadUrl AND -InstallAgentVersion have to be defined or left empty.');
+        if (-Not $this.config('agent_version')) {
+            $this.warn('Icinga 2 Agent will not be installed. Argument -InstallAgentVersion is not defined.');
+            return $FALSE;
+        }
+
+        if (-Not $this.config('download_url')) {
+            $this.warn('Icinga 2 Agent will not be installed. Argument -DownloadUrl is not defined.');
+            return $FALSE;
+        }
+
+        return $FALSE;
     }
 
     #
