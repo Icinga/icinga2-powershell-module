@@ -195,20 +195,38 @@ function Icinga2AgentModule {
     }
 
     #
-    # Print an exception message and wait 5 seconds
-    # before continuing the execution. After each
-    # exception call we should ensure the script
-    # ends with exit.
-    # Todo: Adding exit 1 here results in an script
-    # error we should take care off before adding it
-    # again
-    # Deprecated: Do no longer use!
+    # This function will print messages as errors, but add them internally to
+    # an exception list. These will re-printed at the end to summarize possible
+    # issues during the run
     #
     $installer | Add-Member -membertype ScriptMethod -name 'exception' -value {
         param([string]$message, [string[]]$args);
-        $Error.clear();
-        $this.warn('Calling deprecated function exception. Use throw instead.');
-        throw 'Exception: ' + $message;
+        [array]$exceptions = $this.getProperty('exception_messages');
+        if ($exceptions -eq $null) {
+            $exceptions = @();
+        }
+        $exceptions += $message;
+        $this.setProperty('exception_messages', $exceptions);
+        write-host 'Fatal:' $message -ForegroundColor red;
+    }
+
+    #
+    # Get the current exit code of the script. Return 0 for no errors and 1 for
+    # possible errors, including a summary of what went wrong
+    #
+    $installer | Add-Member -membertype ScriptMethod -name 'getScriptExitCode' -value {
+        [array]$exceptions = $this.getProperty('exception_messages');
+
+        if ($exceptions -eq $null) {
+            return 0;
+        }
+
+        write-host '######### The script encountered several errors during run:' -ForegroundColor red;
+        foreach ($err in $exceptions) {
+            write-host 'Fatal:' $err -ForegroundColor red;
+        }
+
+        return 1;
     }
 
     #
@@ -538,7 +556,7 @@ function Icinga2AgentModule {
     # We could try to install the Agent from a local directory
     #
     $installer | Add-Member -membertype ScriptMethod -name 'isDownloadPathLocal' -value {
-        if (Test-Path ($this.config('download_url'))) {
+        if ($this.config('download_url') -And (Test-Path ($this.config('download_url')))) {
             return $TRUE;
         }
         return $FALSE;
@@ -549,9 +567,6 @@ function Icinga2AgentModule {
     #
     $installer | Add-Member -membertype ScriptMethod -name 'downloadInstaller' -value {
         if (-Not $this.config('agent_version')) {
-            if ($this.config('download_url')) {
-                throw 'Failed to install Icinga 2 Agent. -AgentVersion argument was not specified.';
-            }
             return;
         }
 
@@ -566,10 +581,10 @@ function Icinga2AgentModule {
                 $client.DownloadFile($url, $this.getInstallerPath());
 
                 if (-Not $this.installerExists()) {
-                    throw 'Unable to locate downloaded Icinga 2 Agent installer file from ' + $url + '. Download destination: ' + $this.getInstallerPath();
+                    $this.exception('Unable to locate downloaded Icinga 2 Agent installer file from ' + $url + '. Download destination: ' + $this.getInstallerPath());
                 }
             } catch {
-                throw 'Unable to download Icinga 2 Agent from ' + $url + '. Please ensure the link does exist and access is possible. Error: ' + $_.Exception.Message;
+                $this.exception('Unable to download Icinga 2 Agent from ' + $url + '. Please ensure the link does exist and access is possible. Error: ' + $_.Exception.Message);
             }
         }
     }
@@ -619,12 +634,16 @@ function Icinga2AgentModule {
     # Returns the full path to our installer package
     #
     $installer | Add-Member -membertype ScriptMethod -name 'getInstallerPath' -value {
+        if (-Not $this.config('download_url') -Or -Not $this.getProperty('install_msi_package')) {
+            return '';
+        }
         $installerPath = Join-Path -Path $this.config('download_url') -ChildPath $this.getProperty('install_msi_package')
         if ($this.isDownloadPathLocal()) {
             if (Test-Path $installerPath) {
                 return $installerPath;
             } else {
-                throw 'Failed to locate local Icinga 2 Agent installer at ' + $installerPath;
+                $this.exception('Failed to locate local Icinga 2 Agent installer at ' + $installerPath);
+                return '';
             }
         } else {
             return (Join-Path -Path $Env:temp -ChildPath $this.getProperty('install_msi_package'));
@@ -636,7 +655,7 @@ function Icinga2AgentModule {
     # does exist in first place
     #
     $installer | Add-Member -membertype ScriptMethod -name 'installerExists' -value {
-        if (Test-Path $this.getInstallerPath()) {
+        if ($this.getInstallerPath() -And (Test-Path $this.getInstallerPath())) {
             return $TRUE;
         }
         return $FALSE;
@@ -648,7 +667,8 @@ function Icinga2AgentModule {
     $installer | Add-Member -membertype ScriptMethod -name 'installAgent' -value {
         $this.downloadInstaller();
         if (-Not $this.installerExists()) {
-            throw 'Failed to setup Icinga 2 Agent. Installer package not found.';
+            $this.exception('Failed to setup Icinga 2 Agent. Installer package not found.');
+            return;
         }
         $this.verifyInstallerChecksumAndThrowException();
         $this.info('Installing Icinga 2 Agent');
@@ -674,11 +694,13 @@ function Icinga2AgentModule {
     $installer | Add-Member -membertype ScriptMethod -name 'updateAgent' -value {
         $this.downloadInstaller();
         if (-Not $this.installerExists()) {
-            throw 'Failed to update Icinga 2 Agent. Installer package not found.';
+            $this.exception('Failed to update Icinga 2 Agent. Installer package not found.');
+            return;
         }
         $this.verifyInstallerChecksumAndThrowException()
         if (-Not $this.getProperty('uninstall_id')) {
-            throw 'Failed to update Icinga 2 Agent. Uninstaller is not specified.';
+            $this.exception('Failed to update Icinga 2 Agent. Uninstaller is not specified.');
+            return;
         }
 
         $this.info('Removing previous Icinga 2 Agent version...');
@@ -866,7 +888,7 @@ function Icinga2AgentModule {
     #
     $installer | Add-Member -membertype ScriptMethod -name 'cleanupAgentInstaller' -value {
         if (-Not ($this.isDownloadPathLocal())) {
-            if (Test-Path $this.getInstallerPath()) {
+            if ($this.getInstallerPath() -And (Test-Path $this.getInstallerPath())) {
                 $this.info('Removing downloaded Icinga 2 Agent installer');
                 Remove-Item $this.getInstallerPath() | out-null;
             }
@@ -1390,11 +1412,15 @@ object ApiListener "api" {
     # Have we specified a version to install the Agent?
     #
     $installer | Add-Member -membertype ScriptMethod -name 'canInstallAgent' -value {
-        if (-Not $this.config('agent_version')) {
+        if ($this.config('download_url') -And $this.config('agent_version')) {
+            return $TRUE;
+        }
+
+        if (-Not $this.config('download_url') -And -Not $this.config('agent_version')) {
             return $FALSE;
         }
 
-        return $TRUE;
+        $this.exception('Failed to install Icinga 2 Agent. Either both arguments -DownloadUrl AND -InstallAgentVersion have to be defined or left empty.');
     }
 
     #
@@ -1999,7 +2025,7 @@ object ApiListener "api" {
                 # Exit Code 0 means the NSClient was installed successfully
                 # Otherwise we require to throw an error
                 if ($result.Get_Item('exitcode') -ne 0) {
-                    $this.error('Failed to install NSClient++. ' + $result.Get_Item('message'));
+                    $this.exception('Failed to install NSClient++. ' + $result.Get_Item('message'));
                 } else {
                     $this.info('NSClient++ successfully installed.');
                 }
@@ -2231,9 +2257,10 @@ object ApiListener "api" {
             # We modify the service user at the very last to ensure
             # the user we defined for logging in is valid
             $this.modifyIcingaServiceUser();
-            return 0;
+            return $this.getScriptExitCode();
         } catch {
             $this.printLastException();
+            [void]$this.getScriptExitCode();
             return 1;
         }
     }
