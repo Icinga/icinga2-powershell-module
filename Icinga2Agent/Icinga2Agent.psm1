@@ -78,7 +78,7 @@ function Icinga2AgentModule {
         icinga_enable_debug_log = $IcingaEnableDebugLog;
         agent_add_firewall_rule = $AgentAddFirewallRule;
         parent_endpoints        = $ParentEndpoints;
-        endpoint_config         = $EndpointsConfig;
+        endpoints_config         = $EndpointsConfig;
         global_zones            = $GlobalZones;
         icinga_service_user     = $IcingaServiceUser;
         download_url            = $DownloadUrl;
@@ -315,7 +315,7 @@ function Icinga2AgentModule {
         param([int] $currentIndex);
 
         # Load the config into a local variable for quicker access
-        [array]$endpoint_config = $this.config('endpoint_config');
+        [array]$endpoint_config = $this.config('endpoints_config');
 
         # In case no endpoint config is given, we should do nothing
         if ($endpoint_config -eq $NULL) {
