@@ -20,7 +20,7 @@ function Icinga2AgentModule {
         [bool]$AgentAddFirewallRule       = $FALSE,
         [array]$ParentEndpoints,
         [array]$EndpointsConfig,
-        [array]$GlobalZones,
+        [array]$GlobalZones               = @( 'director-global' ),
 
         # Agent installation / update
         [string]$IcingaServiceUser,
@@ -450,8 +450,7 @@ function Icinga2AgentModule {
 
         # Load all configured global zones
         [array]$global_zones = $this.config('global_zones');
-        # Add director-global zone as default - always
-        [string]$zones = 'object Zone "director-global" {' + "`n" + ' global = true' + "`n" + '}' + "`n";
+        [string]$zones = '';
 
         # In case no zones are given, simply add director-global
         if ($global_zones -eq $NULL) {
@@ -461,8 +460,7 @@ function Icinga2AgentModule {
 
         # Loop through all given zones and add them to our configuration
         foreach ($zone in $global_zones) {
-            # Ignore possible configured director-global zone, as already present
-            if ($zone -ne 'director-global') {
+            if ($zone -ne '') {
                 $zones = $zones + 'object Zone "' + $zone + '" {' + "`n" + ' global = true' + "`n" + '}' + "`n";
             }
         }

@@ -102,13 +102,16 @@ location.
 
 ## -GlobalZones
 
-Allows to specify additional global zones, which will be added into the icinga2.conf.
+Allows to specify global zones, which will be added into the icinga2.conf.
 
-**Note:** The ***director-global*** conf will be added automaticly and does not require to be included
+**Note:** In case no global zone will be defined, ***director-global*** will be added by default. If
+you specify zones by yourself, please ensure to add **director-global** as this is not done automaticly
+when adding custom global-zones.
 
 **Example:**
 ```powershell
     -GlobalZones 'global-linux', 'global-windows', 'global-commands'
+    -GlobalZones 'director-global', 'global-linux', 'global-windows', 'global-commands'
 ```
 
 ## -IcingaServiceUser
