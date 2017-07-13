@@ -283,8 +283,8 @@ function Icinga2AgentModule {
     $installer | Add-Member -membertype ScriptMethod -name 'init' -value {
         $this.setProperty('initialized', $TRUE);
         # Set the default config dir
-        $this.setProperty('config_dir', $Env:ProgramData + '\icinga2\etc\icinga2\');
-        $this.setProperty('api_dir', $Env:ProgramData + '\icinga2\var\lib\icinga2\api');
+        $this.setProperty('config_dir', (Join-Path -Path $Env:ProgramData -ChildPath 'icinga2\etc\icinga2\'));
+        $this.setProperty('api_dir', (Join-Path -Path $Env:ProgramData -ChildPath 'icinga2\var\lib\icinga2\api'));
         $this.setProperty('icinga_ticket', $this.config('ticket'));
         $this.setProperty('local_hostname', $this.config('agent_name'));
         # Ensure we generate the required configuration content
@@ -616,14 +616,15 @@ function Icinga2AgentModule {
     # Returns the full path to our installer package
     #
     $installer | Add-Member -membertype ScriptMethod -name 'getInstallerPath' -value {
+        $installerPath = Join-Path -Path $this.config('download_url') -ChildPath $this.getProperty('install_msi_package')
         if ($this.isDownloadPathLocal()) {
-            if (Test-Path ($this.config('download_url') + $this.getProperty('install_msi_package'))) {
-                return $this.config('download_url') + $this.getProperty('install_msi_package');
+            if (Test-Path $installerPath) {
+                return $installerPath;
             } else {
-                throw 'Failed to locate local Icinga 2 Agent installer at ' + $this.config('download_url') + $this.getProperty('install_msi_package');
+                throw 'Failed to locate local Icinga 2 Agent installer at ' + $installerPath;
             }
         } else {
-            return $Env:temp + '\' + $this.getProperty('install_msi_package');
+            return (Join-Path -Path $Env:temp -ChildPath $this.getProperty('install_msi_package'));
         }
     }
 
@@ -712,7 +713,7 @@ function Icinga2AgentModule {
     #
     $installer | Add-Member -membertype ScriptMethod -name 'isAgentInstalled' -value {
         [string]$architecture = '';
-        [string]$defaultInstallDir = ${Env:ProgramFiles} + "\ICINGA2";
+        [string]$defaultInstallDir = Join-Path -Path $Env:ProgramFiles -ChildPath "ICINGA2";
         if ([IntPtr]::Size -eq 4) {
             $architecture = "x86";
             $regPath = 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*';
@@ -805,7 +806,7 @@ function Icinga2AgentModule {
     $installer | Add-Member -membertype ScriptMethod -name 'getNSClientDefaultExecutablePath' -value {
 
         if ($this.config('nsclient_directory')) {
-            return $this.config('nsclient_directory') + '\nscp.exe';
+            return (Join-Path -Path $this.config('nsclient_directory') -ChildPath 'nscp.exe');
         }
 
         if (Test-Path ('C:\Program Files\NSClient++\nscp.exe')) {
@@ -842,7 +843,7 @@ function Icinga2AgentModule {
     # use them later again
     #
     $installer | Add-Member -membertype ScriptMethod -name 'backupDefaultConfig' -value {
-        [string]$configFile = $this.getProperty('config_dir') + 'icinga2.conf';
+        [string]$configFile = Join-Path -Path $this.getProperty('config_dir') -ChildPath 'icinga2.conf';
         [string]$configBackupFile = $configFile + 'director.bak';
 
         # Check if a config and backup file already exists
@@ -1201,7 +1202,7 @@ object ApiListener "api" {
     # Return the path to the Icinga 2 config file
     #
     $installer | Add-Member -membertype ScriptMethod -name 'getIcingaConfigFile' -value {
-        return ($this.getProperty('config_dir') + 'icinga2.conf');
+        return (Join-Path -Path $this.getProperty('config_dir') -ChildPath 'icinga2.conf');
     }
 
     #
@@ -1260,8 +1261,8 @@ object ApiListener "api" {
     $installer | Add-Member -membertype ScriptMethod -name 'generateCertificates' -value {
 
         if ($this.getProperty('local_hostname') -And $this.config('ca_server') -And $this.getProperty('icinga_ticket')) {
-            [string]$icingaPkiDir = $this.getProperty('config_dir') + 'pki\';
-            [string]$icingaBinary = $this.getInstallPath() + '\sbin\icinga2.exe';
+            [string]$icingaPkiDir = Join-Path -Path $this.getProperty('config_dir') -ChildPath 'pki';
+            [string]$icingaBinary = Join-Path -Path $this.getInstallPath() -ChildPath 'sbin\icinga2.exe';
             [string]$agentName = $this.getProperty('local_hostname');
 
             if (-Not (Test-Path $icingaBinary)) {
@@ -1335,12 +1336,12 @@ object ApiListener "api" {
     # Agent. If not, return FALSE
     #
     $installer | Add-Member -membertype ScriptMethod -name 'hasCertificates' -value {
-        [string]$icingaPkiDir = $this.getProperty('config_dir') + 'pki\';
+        [string]$icingaPkiDir = Join-Path -Path $this.getProperty('config_dir') -ChildPath 'pki';
         [string]$agentName = $this.getProperty('local_hostname');
         if (
-            ((Test-Path ($icingaPkiDir + $agentName + '.key')) `
-            -And (Test-Path ($icingaPkiDir + $agentName + '.crt')) `
-            -And (Test-Path ($icingaPkiDir + 'ca.crt')))
+            ((Test-Path ((Join-Path -Path $icingaPkiDir -ChildPath $agentName) + '.key'))) `
+            -And (Test-Path ((Join-Path -Path $icingaPkiDir -ChildPath $agentName) + '.crt')) `
+            -And (Test-Path (Join-Path -Path $icingaPkiDir -ChildPath 'ca.crt'))
         ) {
             return $TRUE;
         }
@@ -1418,7 +1419,7 @@ object ApiListener "api" {
         if (-Not $this.config('parent_zone') -And $checkInternal) {
             throw 'Parent Zone not defined. Please specify it with -ParentZone <name>';
         }
-        $icingaBinary = $this.getInstallPath() + '\sbin\icinga2.exe';
+        $icingaBinary = Join-Path -Path $this.getInstallPath() -ChildPath 'sbin\icinga2.exe';
 
         if (Test-Path $icingaBinary) {
             $result = $this.startProcess($icingaBinary, $FALSE, 'daemon -C');
@@ -1782,7 +1783,7 @@ object ApiListener "api" {
     #
     $installer | Add-Member -membertype ScriptMethod -name 'writeHostAPIKeyToDisk' -value {
         if (Test-Path ($this.getProperty('config_dir'))) {
-            [string]$apiFile = $this.getProperty('config_dir') + 'icingadirector.token';
+            [string]$apiFile = Join-Path -Path $this.getProperty('config_dir') -ChildPath 'icingadirector.token';
             $this.info('Writing host API-Key "' + $this.getProperty('director_host_token') + '" to "' + $apiFile + '"');
             [System.IO.File]::WriteAllText($apiFile, $this.getProperty('director_host_token'));
         }
@@ -1792,7 +1793,7 @@ object ApiListener "api" {
     # Read Host API-Key from disk for usage
     #
     $installer | Add-Member -membertype ScriptMethod -name 'readHostAPIKeyFromDisk' -value {
-        [string]$apiFile = $this.getProperty('config_dir') + 'icingadirector.token';
+        [string]$apiFile = Join-Path -Path $this.getProperty('config_dir') -ChildPath 'icingadirector.token';
         if (Test-Path ($apiFile)) {
             [string]$hostToken = [System.IO.File]::ReadAllText($apiFile);
             $this.setProperty('director_host_token', $hostToken);
@@ -2034,13 +2035,13 @@ object ApiListener "api" {
 
             $this.info('Trying to download NSClient++ from ' + $this.config('nsclient_installer_path'));
             [System.Object]$client = New-Object System.Net.WebClient;
-            $client.DownloadFile($this.config('nsclient_installer_path'), $Env:temp + '\NSCP.msi');
+            $client.DownloadFile($this.config('nsclient_installer_path'), (Join-Path -Path $Env:temp -ChildPath 'NSCP.msi'));
 
-            return $Env:temp + '\NSCP.msi';
+            return (Join-Path -Path $Env:temp -ChildPath 'NSCP.msi');
         } else {
             # Icinga is shipping a NSClient Version after installation
             # Install this version if defined
-            return $this.getInstallPath() + '\sbin\NSCP.msi';
+            return (Join-Path -Path $this.getInstallPath() -ChildPath 'sbin\NSCP.msi');
         }
 
         return '';
@@ -2254,10 +2255,10 @@ object ApiListener "api" {
 
         if ($this.config('full_uninstallation')) {
             $this.info('Flushing Icinga 2 program data directory...');
-            if (Test-Path ($Env:ProgramData + '\icinga2\')) {
+            if (Test-Path ((Join-Path -Path $Env:ProgramData -ChildPath 'icinga2'))) {
                 try {
                     [System.Object]$folder = New-Object -ComObject Scripting.FileSystemObject;
-                    $folder.DeleteFolder($Env:ProgramData + '\icinga2');
+                    $folder.DeleteFolder((Join-Path -Path $Env:ProgramData -ChildPath 'icinga2'));
                     $this.info('Remaining Icinga 2 configuration successfully removed.');
                 } catch {
                     $this.error('Failed to delete Icinga 2 Program Data Directory: ' + $_.Exception.Message);
