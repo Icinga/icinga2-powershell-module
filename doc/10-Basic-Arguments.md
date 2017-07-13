@@ -208,3 +208,15 @@ Default value: **$FALSE**
 This is simply for development purposes and is barely used inside the module. Might change in the future.
 
 Default value: **$FALSE**
+
+## -ModuleLogFile
+
+Specify a path to either a directory or a file to write all output from the PowerShell module into a
+file for later debugging. In case a directory is specified, the script will automaticly create a new
+file with a unique name into it. If a file is specified which is not yet present, it will be created.
+
+**Examples:**
+```powershell
+    -ModuleLogFile 'C:\mylogs'
+    -ModuleLogFile 'C:\mylogs\mylogfile.log'
+```

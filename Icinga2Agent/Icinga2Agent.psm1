@@ -56,7 +56,8 @@ function Icinga2AgentModule {
         [bool]$FullUninstallation         = $FALSE,
 
         #Internal handling
-        [bool]$DebugMode                  = $FALSE
+        [bool]$DebugMode                  = $FALSE,
+        [string]$ModuleLogFile
     );
 
     #
@@ -104,6 +105,7 @@ function Icinga2AgentModule {
         nsclient_installer_path = $NSClientInstallerPath;
         full_uninstallation     = $FullUninstallation;
         debug_mode              = $DebugMode;
+        module_log_file         = $ModuleLogFile;
     }
 
     #
@@ -195,6 +197,43 @@ function Icinga2AgentModule {
     }
 
     #
+    # Write all output from consoles to a logfile
+    #
+    $installer | Add-Member -membertype ScriptMethod -name 'writeLogFile' -value {
+        param([string]$severity, [string]$content);
+
+        # If no logfile is specified, do nothing
+        if (-Not $this.config('module_log_file')) {
+            return;
+        }
+
+        # Store our logfile into a variable
+        $logFile = $this.config('module_log_file');
+
+        # Have we specified a directory to write into or a file already?
+        try {
+            # Check if we are a directory or a file
+            # Will return false for files or non-existing files
+            $directory = (Get-Item $logFile) -is [System.IO.DirectoryInfo];
+        } catch {
+            # Nothing to catch. Simply get rid of error messages from aboves function in case of error
+            # Will return false anyways on error
+        }
+
+        # If we are a directory, add a file we can write to
+        if ($directory) {
+            $logFile = Join-Path -Path $logFile -ChildPath 'icinga2agent_psmodule.log';
+        }
+
+        # Format a timestamp to get to know the exact date and time. Example: 2017-13-07 22:09:13.263.263
+        $timestamp = Get-Date -Format "yyyy-dd-MM HH:mm:ss.fff";
+        $content = [string]::Format('{0} [{1}]: {2}', $timestamp, $severity, $content);
+
+        # Write the content to our logfile
+        Add-Content -Path $logFile -Value $content;
+    }
+
+    #
     # This function will print messages as errors, but add them internally to
     # an exception list. These will re-printed at the end to summarize possible
     # issues during the run
@@ -208,6 +247,7 @@ function Icinga2AgentModule {
         $exceptions += $message;
         $this.setProperty('exception_messages', $exceptions);
         write-host 'Fatal:' $message -ForegroundColor red;
+        $this.writeLogFile('fatal', $message);
     }
 
     #
@@ -221,9 +261,14 @@ function Icinga2AgentModule {
             return 0;
         }
 
-        write-host '######### The script encountered several errors during run:' -ForegroundColor red;
+        $this.writeLogFile('fatal', '##################################################################');
+        $message = '######## The script encountered several errors during run ########';
+        $this.writeLogFile('fatal', $message);
+        $this.writeLogFile('fatal', '##################################################################');
+        write-host $message -ForegroundColor red;
         foreach ($err in $exceptions) {
             write-host 'Fatal:' $err -ForegroundColor red;
+            $this.writeLogFile('fatal', $err);
         }
 
         return 1;
@@ -265,6 +310,7 @@ function Icinga2AgentModule {
     $installer | Add-Member -membertype ScriptMethod -name 'error' -value {
         param([string] $message, [array] $args);
         Write-Host 'Error:' $message -ForegroundColor red;
+        $this.writeLogFile('error', $message);
     }
 
     #
@@ -273,6 +319,7 @@ function Icinga2AgentModule {
     $installer | Add-Member -membertype ScriptMethod -name 'warn' -value {
         param([string] $message, [array] $args);
         Write-Host 'Warning:' $message -ForegroundColor yellow;
+        $this.writeLogFile('warning', $message);
     }
 
     #
@@ -281,6 +328,7 @@ function Icinga2AgentModule {
     $installer | Add-Member -membertype ScriptMethod -name 'info' -value {
         param([string] $message, [array] $args);
         Write-Host 'Notice:' $message -ForegroundColor green;
+        $this.writeLogFile('info', $message);
     }
 
     #
@@ -291,6 +339,7 @@ function Icinga2AgentModule {
         param([string] $message, [array] $args);
         if ($this.config('debug_mode')) {
             Write-Host 'Debug:' $message -ForegroundColor blue;
+            $this.writeLogFile('debug', $message);
         }
     }
 
@@ -2188,6 +2237,8 @@ object ApiListener "api" {
                 return 1;
             }
 
+            # Write an output to the logfile only, ensuring we always get a proper 'start entry' for the user
+            $this.info('Started script run...');
             # Get the current API-Version from the Icinga Director
             $this.getIcingaDirectorVersion();
             # Read arguments for auto config from the Icinga Director
