@@ -173,7 +173,7 @@ function Icinga2AgentModule {
     # $this.setProperty('agent_version', '2.4.10')
     #
     $installer | Add-Member -membertype ScriptMethod -name 'setProperty' -value {
-        param([string] $key, [string]$value);
+        param([string]$key, $value);
 
         # Initialse some variables first
         # will only be called once
@@ -549,6 +549,9 @@ function Icinga2AgentModule {
     #
     $installer | Add-Member -membertype ScriptMethod -name 'downloadInstaller' -value {
         if (-Not $this.config('agent_version')) {
+            if ($this.config('download_url')) {
+                throw 'Failed to install Icinga 2 Agent. -AgentVersion argument was not specified.';
+            }
             return;
         }
 
