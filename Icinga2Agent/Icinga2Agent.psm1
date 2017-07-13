@@ -179,7 +179,7 @@ function Icinga2AgentModule {
         # will only be called once
         if (-Not $this.properties.Get_Item('initialized')) {
             $this.properties.Set_Item('initialized', $TRUE);
-            $this.init();            
+            $this.init();
         }
 
         $this.properties.Set_Item($key, $value);
@@ -1908,8 +1908,8 @@ object ApiListener "api" {
                         $value = $value.Replace("`r", '');
                         $value = $value.Replace("`n", '');
 
-                        if ($value.Contains( ',')) {
-                            [array]$valueArray = $value.Split(',');
+                        if ($value.Contains( '!')) {
+                            [array]$valueArray = $value.Split('!');
                             $this.overrideConfig($argument, $valueArray);
                         } else {
                             if ($value.toLower() -eq 'true') {
