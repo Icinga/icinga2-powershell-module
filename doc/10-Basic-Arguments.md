@@ -244,7 +244,7 @@ This is simply for development purposes and is barely used inside the module. Mi
 
 Default value: **$FALSE**
 
-## -ModuleLogFile
+## -ModuleLogFile (optional)
 
 Specify a path to either a directory or a file to write all output from the PowerShell module into a
 file for later debugging. In case a directory is specified, the script will automaticly create a new
