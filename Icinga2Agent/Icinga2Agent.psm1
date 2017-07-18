@@ -54,6 +54,7 @@ function Icinga2AgentModule {
 
         # Uninstaller arguments
         [bool]$FullUninstallation         = $FALSE,
+        [bool]$RemoveNSClient             = $FALSE,
 
         #Internal handling
         [bool]$DebugMode                  = $FALSE,
@@ -104,6 +105,7 @@ function Icinga2AgentModule {
         nsclient_directory      = $NSClientDirectory;
         nsclient_installer_path = $NSClientInstallerPath;
         full_uninstallation     = $FullUninstallation;
+        remove_nsclient         = $RemoveNSClient;
         debug_mode              = $DebugMode;
         module_log_file         = $ModuleLogFile;
     }
@@ -2326,9 +2328,17 @@ object ApiListener "api" {
     }
 
     #
-    # Removes the Icinga 2 Agent from the system
+    # Deprecated function
     #
     $installer | Add-Member -membertype ScriptMethod -name 'uninstallIcinga2Agent' -value {
+        $this.warn('The function "uninstallIcinga2Agent" is deprecated and will be removed soon. Please use "uninstallMonitoringComponents" instead.')
+        return $this.uninstallMonitoringComponents();
+    }
+
+    #
+    # Removes the Icinga 2 Agent from the system
+    #
+    $installer | Add-Member -membertype ScriptMethod -name 'uninstallMonitoringComponents' -value {
         $this.info('Trying to locate Icinga 2 Agent...');
 
         if ($this.isAgentInstalled()) {
@@ -2351,15 +2361,31 @@ object ApiListener "api" {
                     $folder.DeleteFolder((Join-Path -Path $Env:ProgramData -ChildPath 'icinga2'));
                     $this.info('Remaining Icinga 2 configuration successfully removed.');
                 } catch {
-                    $this.error('Failed to delete Icinga 2 Program Data Directory: ' + $_.Exception.Message);
-                    return 1;
+                    $this.exception('Failed to delete Icinga 2 Program Data Directory: ' + $_.Exception.Message);
                 }
             } else {
                 $this.warn('Icinga 2 Agent program directory not present.');
             }
         }
 
-        return 0;
+        if ($this.config('remove_nsclient')) {
+            $this.info('Trying to remove installed NSClient++...');
+
+            $nsclient = Get-WmiObject -Class Win32_Product |
+                Where-Object {
+                    $_.Name -match 'NSClient*';
+                }
+
+            if ($nsclient -ne $null) {
+                $this.info('Removing installed NSClient++...');
+                $nsclient.Uninstall();
+                $this.info('NSClient++ has been successfully removed.');
+            } else {
+                $this.warn('NSClient++ could not be located on the system. Nothing to remove.');
+            }
+        }
+
+        return $this.getScriptExitCode();
     }
 
     return $installer;

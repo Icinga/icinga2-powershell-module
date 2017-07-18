@@ -233,8 +233,16 @@ to ensure we are connected to the correct endpoint to prevent possible man-in-th
 
 ## -FullUninstallation (optional)
 
-This argument is only used by the function 'uninstallIcinga2Agent' and will remove the remaining content 
-from 'C:\Program Data\icinga2' to prepare a clean setup of the Icinga 2 infrastrucure.
+This argument is only used by the function 'uninstallMonitoringComponents' and will remove 
+the remaining content from 'C:\Program Data\icinga2' to prepare a clean setup of the Icinga 2
+infrastrucure.
+
+Default value: **$FALSE**
+
+## -RemoveNSClient (optional)
+
+When this argument is set, the installed NSClient++ will be removed from the system as well.
+This argument is only used by calling the function 'uninstallMonitoringComponents'
 
 Default value: **$FALSE**
 
