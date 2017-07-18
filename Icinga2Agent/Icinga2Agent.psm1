@@ -1208,15 +1208,27 @@ function Icinga2AgentModule {
             }
 
             [string]$icingaNewConfig =
-'/** Icinga 2 Config - proposed by Icinga 2 PowerShell Module */
+'/**
+ * Icinga 2 Config - Proposed by Icinga 2 PowerShell Module
+ */
+
+/* Define our includes to run the agent properly. */
 include "constants.conf"
 include <itl>
 include <plugins>
 include <nscp>
 include <windows-plugins>
 
+/* Define our block required to enable or disable Icinga 2 debug log
+ * Enable or disable it by using the PowerShell Module with
+ * argument -IcingaEnableDebugLog or by switching
+ * PowerShellIcinga2EnableDebug to true or false manually.
+ * true: Debug log is active
+ * false: Debug log is deactivated
+ * IMPORTANT: ";" after true or false has to remain to allow the
+ *            PowerShell Module to switch this feature on or off.
+ */
 const PowerShellIcinga2EnableDebug = false;
-
 if (PowerShellIcinga2EnableDebug) {
   object FileLogger "debug-file" {
     severity = "debug"
@@ -1224,26 +1236,49 @@ if (PowerShellIcinga2EnableDebug) {
   }
 }
 
+/* Try to define a constant for our NSClient++ installation
+ * IMPORTANT: If the NSClient++ is installed newly to the system, the
+ * Icinga Service has to be restarted in order to set this variable
+ * correctly. If the NSClient++ is installed over the PowerShell Module,
+ * the Icinga 2 Service is restarted automaticly.
+ */
 if (!globals.contains("NscpPath")) {
   NscpPath = dirname(msi_get_component_path("{5C45463A-4AE9-4325-96DB-6E239C034F93}"))
 }
+
+/* Enable our default main logger feature to write log output. */
 object FileLogger "main-log" {
   severity = "information"
   path = LocalStateDir + "/log/icinga2/icinga2.log"
 }
 
+/* All informations required to correctly connect to our parent Icinga 2 nodes. */
 object Endpoint "' + $this.getProperty('local_hostname') + '" {}
 ' + $this.getProperty('endpoint_objects') + '
+/* Define the zone and its containing endpoints we should communicate with. */
 object Zone "' + $this.config('parent_zone') + '" {
   endpoints = [ ' + $this.getProperty('endpoint_nodes') +' ]
 }
 
+/* All of our global zones, check commands and other configuration are synced into.
+ * Director global zone must be defined in case the Icinga Director is beeing used.
+ * Default value for this is "director-global".
+ * All additional zones can be configured with -GlobalZones argument.
+ * IMPORTANT: If -GlobalZones argument is used, the Icinga Director global zones has
+ *            to be defined as well within the argument array.
+ */
 ' + $this.getProperty('global_zones') + '
+/* Define a zone for our current agent and set our parent zone for proper communication. */
 object Zone "' + $this.getProperty('local_hostname') + '" {
   parent = "' + $this.config('parent_zone') + '"
   endpoints = [ "' + $this.getProperty('local_hostname') + '" ]
 }
 
+/* Configure all settings we require for our API listener to properly work.
+ * This will include the certificates, if we accept configurations which
+ * can be changed with argument -AcceptConfig and the bind informations.
+ * The bind_port can be modified with argument -AgentListenPort.
+ */
 object ApiListener "api" {
   cert_path = SysconfDir + "/icinga2/pki/' + $this.getProperty('local_hostname') + '.crt"
   key_path = SysconfDir + "/icinga2/pki/' + $this.getProperty('local_hostname') + '.key"
