@@ -42,7 +42,7 @@ function Icinga2AgentModule {
         [string]$DirectorPassword,
         [string]$DirectorDomain,
         [string]$DirectorAuthToken,
-        [string]$DirectorHostObject,
+        [System.Object]$DirectorHostObject,
         [bool]$DirectorDeployConfig       = $FALSE,
 
         # NSClient Installer
@@ -2023,6 +2023,41 @@ object ApiListener "api" {
     }
 
     #
+    # This function will convert a [hashtable] or [array] object to string
+    # with function ConvertTo-Json for argument -DirectorHostObject.
+    # It will however only process those if the PowerShell Version is 3
+    # and above, because Version 2 is not providing the required
+    # functionality. In that case the module will throw an exception
+    #
+    $installer | Add-Member -membertype ScriptMethod -name 'convertDirectorHostObjectArgument' -value {
+
+        # First add the value to an object we can work with
+        [System.Object]$json = $this.config('director_host_object');
+
+        # In case the argument is already a string -> nothing to do
+        if ($json.GetType() -eq [string]) {
+            # Do nothing
+            return;
+        } elseif ($json.GetType() -eq [hashtable] -Or $json.GetType() -eq [array]) {
+            # Check which PowerShell Version we are using and throw an error in case our Version does not support the argument
+            if ($PSVersionTable.PSVersion.Major -lt 3) {
+                [string]$errorMessage = 'You are trying to pass an object of type [hashtable] or [array] for argument "-DirectorHostObject", but are using ' +
+                                        'PowerShell Version 2 or lower. Passing hashtables through this argument is possible, but it requires to be ' +
+                                        'converted with function ConvertTo-Json, which is available on PowerShell Version 3 and above only. ' +
+                                        'You can still process JSON-Values with this module, even on PowerShell Version 2, but you will have to pass the ' +
+                                        'JSON as string instead of an object. This module will now exit with an error code. For further details, please ' +
+                                        'read the documentation for the "-DirectorHostObject" argument. ' +
+                                        'Documentation: https://github.com/Icinga/icinga2-powershell-module/blob/master/doc/10-Basic-Arguments.md';
+                $this.exception($errorMessage);
+                throw 'PowerShell Version exception.';
+            }
+
+            # If our PowerShell Version is supporting the function, convert it to a valid string
+            $this.overrideConfig('director_host_object', (ConvertTo-Json -Compress $json));
+        }
+    }
+
+    #
     # This function will fetch all arguments configured inside the Icinga Director
     # to allow an entire auto configuration of the Icinga 2 Agent
     #
@@ -2314,6 +2349,8 @@ object ApiListener "api" {
             $this.info('Started script run...');
             # Get the current API-Version from the Icinga Director
             $this.getIcingaDirectorVersion();
+            # Convert our DirectorHostObject argument from Object to String if required
+            $this.convertDirectorHostObjectArgument();
             # Read arguments for auto config from the Icinga Director
             # At first only with our public key for global config attributes
             $this.fetchArgumentsFromIcingaDirector($TRUE);

@@ -39,16 +39,37 @@ To fetch the Ticket for a host, creating host objects or deploying the configura
 authenticate against the Icinga Director. This parameter allows to set the Password we shall use to login.
 
 ### -DirectorHostObject
-This argument allows you to parse an JSON formated, compressed (flat) string to the PowerShell Module, 
-allowing the module to connect to the Icinga Director API to create it.
-Example:
-```json
-    {"object_name":"&hostname_placeholder&","object_type":"object","vars":{"os":"Windows"},"imports":["Icinga Agent"],"address":"&hostname_placeholder&","display_name":"&hostname_placeholder&"}
+This argument allows you to parse either a valid JSON-String or an hashtable / array, containing all
+informations for the host object to create. Please note that using arrays or hashtable objects for this
+argument will require PowerShell version 3 and above. On Version 2 and below the module will throw
+an exception, as this version is not supporting the required function ConvertTo-Json.
+
+Examples:
+```powershell
+    # JSON Object as string
+    $json = '{"object_name":"&hostname_placeholder&","object_type":"object","vars":{"os":"Windows"},"imports":["Icinga Agent"],"address":"&ipaddress&","display_name":" hostname_placeholder&"}'
+    $icinga = Icinga2Agentmodule
+              -DirectorHostObject $json
+
+    # JSON Object as hashtable (requires PowerShell Version 3 and above)
+    $json = @{
+              'object_name' = '&hostname_placeholder&'
+              'object_type' = 'object'
+              'vars'        = @{
+                                'os' = 'Windows'
+                               }
+              'address'     = '&ipaddress&'
+              'imports'     = ('Icinga Agent')
+             }
+    $icinga = Icinga2Agentmodule
+              -DirectorHostObject $json
 ```
 
-For a simplier configuration in certain cases, you can use the placeholder **&hostname_placeholder&** 
-which will be replaced internally by either the -AgentName, -FetchAgentName or -FetchAgentFQDN parameter 
-defined hostname.
+Both ways are valid and allowed by the PowerShell Module. Please keep however in mind that the last
+example will only work on PowerShell Version 3.x and above.
+
+For a simplier configuration in certain cases, you can use the [placeholders](31-Placeholders.md) for
+the hostname or the ip address.
 
 ### -DirectorDeployConfig
 If this parameter is set to **$TRUE**, the PowerShell module will tell the Icinga Director to deploy 
