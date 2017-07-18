@@ -172,12 +172,26 @@ Default value: **https://packages.icinga.com/windows/**
 
 **Requires:** -InstallAgentVersion
 
+## -AgentInstallDirectory (optional)
+
+Allows to specify in which directory the Icinga 2 Agent will be installed into. In case of an
+Agent update you can specify with this argument a new directory the new Agent will be
+installed into. The old directory will be removed caused by the required uninstaller process.
+
+**Examples:**
+```powershell
+    -AgentInstallDirectory 'C:\MyIcinga2Agent'
+    -AllowUpdates $TRUE -InstallAgentVersion '2.6.3' -AgentInstallDirectory 'C:\MyNewIcinga2Agent'
+```
+
 ## -AllowUpdates (optional)
 
 In case the Icinga 2 Agent is already installed on the system, this parameter will allow you to 
-configure if you wish to upgrade / downgrade to a specified version with the *-InstallAgentVersion* 
-parameter as well. If none of both parameters is defined, the module will not update or downgrade the 
-agent.
+configure if you wish to upgrade / downgrade to a specified version with the *-InstallAgentVersion* parameter as well. If none of both parameters is defined, the module will not update or downgrade the agent.
+
+If argument *-AgentInstallDirectory* is not specified, the Icinga 2 Agent will be installed into
+the same directory as before. In case defined, the PowerShell Module will use the new directory
+as installation target.
 
 Default value: **$FALSE**
 

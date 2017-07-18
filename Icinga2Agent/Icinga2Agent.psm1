@@ -25,6 +25,7 @@ function Icinga2AgentModule {
         # Agent installation / update
         [string]$IcingaServiceUser,
         [string]$DownloadUrl              = 'https://packages.icinga.com/windows/',
+        [string]$AgentInstallDirectory,
         [bool]$AllowUpdates               = $FALSE,
         [array]$InstallerHashes,
         [bool]$FlushApiDirectory          = $FALSE,
@@ -80,10 +81,11 @@ function Icinga2AgentModule {
         icinga_enable_debug_log = $IcingaEnableDebugLog;
         agent_add_firewall_rule = $AgentAddFirewallRule;
         parent_endpoints        = $ParentEndpoints;
-        endpoints_config         = $EndpointsConfig;
+        endpoints_config        = $EndpointsConfig;
         global_zones            = $GlobalZones;
         icinga_service_user     = $IcingaServiceUser;
         download_url            = $DownloadUrl;
+        agent_install_directory = $AgentInstallDirectory;
         allow_updates           = $AllowUpdates;
         installer_hashes        = $InstallerHashes;
         flush_api_directory     = $FlushApiDirectory;
@@ -711,6 +713,32 @@ function Icinga2AgentModule {
     }
 
     #
+    # Get all arguments for the Icinga 2 Agent installer package
+    #
+    $installer | Add-Member -membertype ScriptMethod -name 'getIcingaAgentInstallerArguments' -value {
+        # Initialise some basic variables
+        [string]$arguments = '';
+        [string]$installerLocation = '';
+
+        # By default, install the Icinga 2 Agent again in the pre-installed directory
+        # before the update. Will only apply during updates / downgrades of the Agent
+        if ($this.getProperty('cur_install_dir')) {
+            $installerLocation = [string]::Format(' INSTALL_ROOT="{0}"', $this.getProperty('cur_install_dir'));
+        }
+
+        # However, if we specified a custom directory over the argument, always use that
+        # one as installer target directory
+        if ($this.config('agent_install_directory')) {
+            $installerLocation = [string]::Format(' INSTALL_ROOT="{0}"', $this.config('agent_install_directory'));
+            $this.setProperty('cur_install_dir', $this.config('agent_install_directory'));
+        }
+
+        $arguments += $installerLocation;
+write-host $arguments;
+        return $arguments;
+    }
+
+    #
     # Install the Icinga 2 agent from the provided installation package
     #
     $installer | Add-Member -membertype ScriptMethod -name 'installAgent' -value {
@@ -720,15 +748,15 @@ function Icinga2AgentModule {
             return;
         }
         $this.verifyInstallerChecksumAndThrowException();
-        $this.info('Installing Icinga 2 Agent');
+        $this.info('Installing Icinga 2 Agent...');
 
         # Start the installer process
-        $result = $this.startProcess('MsiExec.exe', $TRUE, '/quiet /i "' + $this.getInstallerPath() + '"');
+        $result = $this.startProcess('MsiExec.exe', $TRUE, [string]::Format('/quiet /i {0} {1}', $this.getInstallerPath(), $this.getIcingaAgentInstallerArguments()));
 
         # Exit Code 0 means the Agent was installed successfully
         # Otherwise we require to throw an error
         if ($result.Get_Item('exitcode') -ne 0) {
-            $this.error('Failed to install Icinga 2 Agent. ' + $result.Get_Item('message'));
+            $this.exception('Failed to install Icinga 2 Agent. ' + $result.Get_Item('message'));
         } else {
             $this.info('Icinga 2 Agent installed.');
         }
@@ -759,24 +787,23 @@ function Icinga2AgentModule {
         # Exit Code 0 means the Agent was removed successfully
         # Otherwise we require to throw an error
         if ($result.Get_Item('exitcode') -ne 0) {
-            $this.error('Failed to remove Icinga 2 Agent. ' + $result.Get_Item('message'));
+            $this.exception('Failed to remove Icinga 2 Agent. ' + $result.Get_Item('message'));
         } else {
             $this.info('Icinga 2 Agent successfully removed.');
         }
 
         $this.info('Installing new Icinga 2 Agent version...');
         # Start the installer process
-        $result = $this.startProcess('MsiExec.exe', $TRUE, '/quiet /i "' + $this.getInstallerPath() + '"');
+        $result = $this.startProcess('MsiExec.exe', $TRUE, [string]::Format('/quiet /i {0} {1}', $this.getInstallerPath(), $this.getIcingaAgentInstallerArguments()));
 
         # Exit Code 0 means the Agent was removed successfully
         # Otherwise we require to throw an error
         if ($result.Get_Item('exitcode') -ne 0) {
-            $this.error('Failed to install new Icinga 2 Agent. ' + $result.Get_Item('message'));
+            $this.exception('Failed to install new Icinga 2 Agent. ' + $result.Get_Item('message'));
         } else {
             $this.info('Icinga 2 Agent successfully updated.');
         }
 
-        $this.setProperty('cur_install_dir', $this.getProperty('def_install_dir'));
         $this.setProperty('require_restart', 'true');
     }
 
@@ -787,7 +814,6 @@ function Icinga2AgentModule {
     #
     $installer | Add-Member -membertype ScriptMethod -name 'isAgentInstalled' -value {
         [string]$architecture = '';
-        [string]$defaultInstallDir = Join-Path -Path $Env:ProgramFiles -ChildPath "ICINGA2";
         if ([IntPtr]::Size -eq 4) {
             $architecture = "x86";
             $regPath = 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*';
@@ -813,7 +839,6 @@ function Icinga2AgentModule {
         if ($localData.UninstallString) {
             $this.setProperty('uninstall_id', $localData.UninstallString.Replace("MsiExec.exe ", ""));
         }
-        $this.setProperty('def_install_dir', $defaultInstallDir);
         $this.setProperty('cur_install_dir', $localData.InstallLocation);
         $this.setProperty('agent_version', $localData.DisplayVersion);
         $this.setProperty('install_msi_package', 'Icinga2-v' + $this.config('agent_version') + '-' + $architecture + '.msi');
@@ -823,6 +848,8 @@ function Icinga2AgentModule {
             return $TRUE;
         } else {
             $this.warn('Icinga 2 Agent does not seem to be installed on the system');
+            # Set Default value for install dir
+            $this.setProperty('cur_install_dir', (Join-Path $Env:ProgramFiles -ChildPath 'ICINGA2'));
         }
         return $FALSE;
     }
@@ -901,7 +928,7 @@ function Icinga2AgentModule {
     # the correct, valid installation path
     #
     $installer | Add-Member -membertype ScriptMethod -name 'getInstallPath' -value {
-        [string]$agentPath = $this.getProperty('def_install_dir');
+        [string]$agentPath = '';
         if ($this.getProperty('cur_install_dir')) {
             $agentPath = $this.getProperty('cur_install_dir');
         }
