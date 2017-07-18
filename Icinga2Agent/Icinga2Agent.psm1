@@ -734,7 +734,7 @@ function Icinga2AgentModule {
         }
 
         $arguments += $installerLocation;
-write-host $arguments;
+
         return $arguments;
     }
 
