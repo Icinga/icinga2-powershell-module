@@ -128,13 +128,16 @@ location.
 
 ## -GlobalZones (optional)
 
-Allows to specify additional global zones, which will be added into the icinga2.conf.
+Allows to specify global zones, which will be added into the icinga2.conf.
 
-**Note:** The ***director-global*** conf will be added automaticly and does not require to be included
+**Note:** In case no global zone will be defined, ***director-global*** will be added by default. If
+you specify zones by yourself, please ensure to add **director-global** as this is not done automaticly
+when adding custom global-zones.
 
 **Example:**
 ```powershell
     -GlobalZones 'global-linux', 'global-windows', 'global-commands'
+    -GlobalZones 'director-global', 'global-linux', 'global-windows', 'global-commands'
 ```
 
 ## -IcingaServiceUser (optional)
@@ -240,3 +243,15 @@ Default value: **$FALSE**
 This is simply for development purposes and is barely used inside the module. Might change in the future.
 
 Default value: **$FALSE**
+
+## -ModuleLogFile
+
+Specify a path to either a directory or a file to write all output from the PowerShell module into a
+file for later debugging. In case a directory is specified, the script will automaticly create a new
+file with a unique name into it. If a file is specified which is not yet present, it will be created.
+
+**Examples:**
+```powershell
+    -ModuleLogFile 'C:\mylogs'
+    -ModuleLogFile 'C:\mylogs\mylogfile.log'
+```
