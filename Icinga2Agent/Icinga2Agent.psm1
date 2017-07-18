@@ -751,7 +751,7 @@ function Icinga2AgentModule {
         $this.info('Installing Icinga 2 Agent...');
 
         # Start the installer process
-        $result = $this.startProcess('MsiExec.exe', $TRUE, [string]::Format('/quiet /i {0} {1}', $this.getInstallerPath(), $this.getIcingaAgentInstallerArguments()));
+        $result = $this.startProcess('MsiExec.exe', $TRUE, [string]::Format('/quiet /i "{0}" {1}', $this.getInstallerPath(), $this.getIcingaAgentInstallerArguments()));
 
         # Exit Code 0 means the Agent was installed successfully
         # Otherwise we require to throw an error
@@ -794,7 +794,7 @@ function Icinga2AgentModule {
 
         $this.info('Installing new Icinga 2 Agent version...');
         # Start the installer process
-        $result = $this.startProcess('MsiExec.exe', $TRUE, [string]::Format('/quiet /i {0} {1}', $this.getInstallerPath(), $this.getIcingaAgentInstallerArguments()));
+        $result = $this.startProcess('MsiExec.exe', $TRUE, [string]::Format('/quiet /i "{0}" {1}', $this.getInstallerPath(), $this.getIcingaAgentInstallerArguments()));
 
         # Exit Code 0 means the Agent was removed successfully
         # Otherwise we require to throw an error
