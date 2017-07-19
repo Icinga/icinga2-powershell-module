@@ -2034,6 +2034,11 @@ object ApiListener "api" {
         # First add the value to an object we can work with
         [System.Object]$json = $this.config('director_host_object');
 
+        # Prevent processing of empty data
+        if ($json -eq $null -Or $json -eq '') {
+            return;
+        }
+
         # In case the argument is already a string -> nothing to do
         if ($json.GetType() -eq [string]) {
             # Do nothing
