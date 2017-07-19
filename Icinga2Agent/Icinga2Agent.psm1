@@ -58,6 +58,8 @@ function Icinga2AgentModule {
         [bool]$RemoveNSClient             = $FALSE,
 
         #Internal handling
+        [switch]$RunInstaller             = $FALSE,
+        [switch]$RunUninstaller           = $FALSE,
         [bool]$DebugMode                  = $FALSE,
         [string]$ModuleLogFile
     );
@@ -2462,7 +2464,7 @@ object ApiListener "api" {
             if (Test-Path ((Join-Path -Path $Env:ProgramData -ChildPath 'icinga2'))) {
                 try {
                     [System.Object]$folder = New-Object -ComObject Scripting.FileSystemObject;
-                    $folder.DeleteFolder((Join-Path -Path $Env:ProgramData -ChildPath 'icinga2'));
+                    [void]$folder.DeleteFolder((Join-Path -Path $Env:ProgramData -ChildPath 'icinga2'));
                     $this.info('Remaining Icinga 2 configuration successfully removed.');
                 } catch {
                     $this.exception('Failed to delete Icinga 2 Program Data Directory: ' + $_.Exception.Message);
@@ -2482,7 +2484,7 @@ object ApiListener "api" {
 
             if ($nsclient -ne $null) {
                 $this.info('Removing installed NSClient++...');
-                $nsclient.Uninstall();
+                [void]$nsclient.Uninstall();
                 $this.info('NSClient++ has been successfully removed.');
             } else {
                 $this.warn('NSClient++ could not be located on the system. Nothing to remove.');
@@ -2492,5 +2494,23 @@ object ApiListener "api" {
         return $this.getScriptExitCode();
     }
 
+    # Make the installation / uninstallation of the script easier and shorter
+    [int]$installerExitCode = 0;
+    [int]$uninstallerExitCode = 0;
+    # If flag RunUninstaller is set, do the uninstallation of the components
+    if ($RunUninstaller) {
+        $uninstallerExitCode = $installer.uninstallMonitoringComponents();
+    }
+    # If flag RunInstaller is set, do the installation of the components
+    if ($RunInstaller) {
+        $installerExitCode = $installer.installMonitoringComponents();
+    }
+    if ($RunInstaller -Or $RunUninstaller) {
+        if ($installerExitCode -ne 0 -Or $uninstallerExitCode -ne 0) {
+            return 1;
+        }
+    }
+
+    # Otherwise handle everything as before
     return $installer;
 }

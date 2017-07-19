@@ -277,3 +277,54 @@ file with a unique name into it. If a file is specified which is not yet present
     -ModuleLogFile 'C:\mylogs'
     -ModuleLogFile 'C:\mylogs\mylogfile.log'
 ```
+
+## -RunInstaller (optional)
+
+This argument allows to shorten the entire call of the module, not requiring to define
+a custom variable and executing the installation function of the monitoring components.
+
+**Instead of**
+```powershell
+    $icinga = Icinga2AgentModule `
+              -DirectorUrl       'https://icinga2-master.example.com/icingaweb2/director/' `
+              -DirectorAuthToken '34086b3480965b083476c08346c34980';
+
+    exit $icinga.installMonitoringComponents();
+```
+
+**You can use**
+```powershell
+    exit Icinga2AgentModule `
+              -DirectorUrl       'https://icinga2-master.example.com/icingaweb2/director/' `
+              -DirectorAuthToken '34086b3480965b083476c08346c34980' `
+              -RunInstaller;
+```
+
+Which has in the result the same effect.
+
+## -RunUninstaller (optional)
+
+This argument allows to shorten the entire call of the module, not requiring to define
+a custom variable and executing the uninstallation function of the monitoring components.
+
+**Instead of**
+```powershell
+    $icinga = Icinga2AgentModule `
+              -FullUninstallation $TRUE `
+              -RemoveNSClient $TRUE
+
+    exit $icinga.uninstallMonitoringComponents();
+```
+
+**You can use**
+```powershell
+    exit Icinga2AgentModule `
+              -FullUninstallation $TRUE `
+              -RemoveNSClient $TRUE `
+              -RunUninstaller;
+```
+
+Which has in the result the same effect.
+
+**NOTE:** You can also combine both arguments *-RunInstaller* and *-RunUninstaller* in the same
+call. The **uninstaller** function is **always called before** to the **installation** function.

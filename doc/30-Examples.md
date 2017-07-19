@@ -73,7 +73,7 @@ If we have created a custom user within a domain we want to use, this can be don
 
 For more details please take a look on the [Icinga Director Automation Guide](20-Automation.md).
 
-```
+```powershell
     $icinga = Icinga2AgentModule `
               -DirectorUrl       'https://icinga2-master.example.com/icingaweb2/director/' `
               -DirectorAuthToken '34086b3480965b083476c08346c34980'
@@ -127,4 +127,34 @@ available values.
               -ParentEndpoints      'icinga2a-master.example.com', 'icinga2b-master.example.com' `
 
     exit $icinga.installMonitoringComponents();
+```
+
+### Shorten the script call
+
+The PowerShell module also provides a possibility to shorten certain actions, not requiring to
+define a variable and executing funtions.
+
+**Installation example**
+
+```powershell
+    exit Icinga2AgentModule `
+              -DirectorUrl       'https://icinga2-master.example.com/icingaweb2/director/' `
+              -DirectorAuthToken '34086b3480965b083476c08346c34980' `
+              -RunInstaller;
+```
+
+**Uninstallation example**
+
+```powershell
+    exit Icinga2AgentModule -RunUninstaller;
+```
+
+**Combine uninstallation and installation at once**
+
+```powershell
+    exit Icinga2AgentModule `
+              -DirectorUrl       'https://icinga2-master.example.com/icingaweb2/director/' `
+              -DirectorAuthToken '34086b3480965b083476c08346c34980' `
+              -RunUninstaller `
+              -RunInstaller;
 ```
