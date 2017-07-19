@@ -42,12 +42,12 @@ All defined values will be fetched by the PowerShell module over the API key and
 
 An entire code example on how to call the PowerShell module can be found below:
 
-```
-$icinga = Icinga2AgentModule `
-              -DirectorUrl       'https://icinga2-master.example.com/icingaweb2/director/' `
-              -DirectorAuthToken '34086b3480965b083476c08346c34980'
+```powershell
+    $icinga = Icinga2AgentModule `
+                  -DirectorUrl       'https://icinga2-master.example.com/icingaweb2/director/' `
+                  -DirectorAuthToken '34086b3480965b083476c08346c34980'
 
-$icinga.installMonitoringComponents();
+    $icinga.install();
 ```
 
 Now the PowerShell module will connect to this host over the Web-Api and fetch all basic arguments 

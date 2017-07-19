@@ -247,7 +247,7 @@ to ensure we are connected to the correct endpoint to prevent possible man-in-th
 
 ## -FullUninstallation (optional)
 
-This argument is only used by the function 'uninstallMonitoringComponents' and will remove 
+This argument is only used by the function 'uninstall' and will remove
 the remaining content from 'C:\Program Data\icinga2' to prepare a clean setup of the Icinga 2
 infrastrucure.
 
@@ -256,7 +256,7 @@ Default value: **$FALSE**
 ## -RemoveNSClient (optional)
 
 When this argument is set, the installed NSClient++ will be removed from the system as well.
-This argument is only used by calling the function 'uninstallMonitoringComponents'
+This argument is only used by calling the function 'uninstall'
 
 Default value: **$FALSE**
 
@@ -289,7 +289,7 @@ a custom variable and executing the installation function of the monitoring comp
               -DirectorUrl       'https://icinga2-master.example.com/icingaweb2/director/' `
               -DirectorAuthToken '34086b3480965b083476c08346c34980';
 
-    exit $icinga.installMonitoringComponents();
+    exit $icinga.install();
 ```
 
 **You can use**
@@ -313,7 +313,7 @@ a custom variable and executing the uninstallation function of the monitoring co
               -FullUninstallation $TRUE `
               -RemoveNSClient $TRUE
 
-    exit $icinga.uninstallMonitoringComponents();
+    exit $icinga.uninstall();
 ```
 
 **You can use**

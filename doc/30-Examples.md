@@ -33,7 +33,7 @@ here is a full example for installing an Agent:
               -ParentEndpoints  'icinga2a', 'icinga2b' `
               -CAServer         'icinga-master'
 
-    exit $icinga.installMonitoringComponents();
+    exit $icinga.install();
 ```
 
 ### Switch Icinga 2 Debug log
@@ -44,7 +44,7 @@ log, simply use this function call:
 ```powershell
     $icinga = Icinga2AgentModule -IcingaEnableDebugLog $TRUE
 
-    exit $icinga.installMonitoringComponents();
+    exit $icinga.install();
 ```
 
 To disable the debug log, either set the variable to $FALSE or leave the argument empty.
@@ -58,7 +58,7 @@ it pretty simple:
 ```powershell
     $icinga = Icinga2AgentModule -IcingaServiceUser 'NT AUTHORITY\NetworkService'
 
-    exit $icinga.installMonitoringComponents();
+    exit $icinga.install();
 ```
 
 If we have created a custom user within a domain we want to use, this can be done as well:
@@ -66,7 +66,7 @@ If we have created a custom user within a domain we want to use, this can be don
 ```powershell
     $icinga = Icinga2AgentModule -IcingaServiceUser 'icinga\jdoe:mysecretpassword'
 
-    exit $icinga.installMonitoringComponents();
+    exit $icinga.install();
 ```
 
 ### Recommended automation with Icinga Director Self Service API
@@ -78,7 +78,7 @@ For more details please take a look on the [Icinga Director Automation Guide](20
               -DirectorUrl       'https://icinga2-master.example.com/icingaweb2/director/' `
               -DirectorAuthToken '34086b3480965b083476c08346c34980'
 
-    $icinga.installMonitoringComponents();
+    $icinga.install();
 ```
 
 ### Basic Icinga installation and configuration
@@ -99,7 +99,7 @@ Icinga Director
               -ParentZone           'icinga2-master-zone' `
               -ParentEndpoints      'icinga2a-master.example.com', 'icinga2b-master.example.com' `
 
-    exit $icinga.installMonitoringComponents();
+    exit $icinga.install();
 ```
 
 ### Basic Icinga installation with host creation and deployment
@@ -126,7 +126,7 @@ available values.
               -ParentZone           'icinga2-master-zone' `
               -ParentEndpoints      'icinga2a-master.example.com', 'icinga2b-master.example.com' `
 
-    exit $icinga.installMonitoringComponents();
+    exit $icinga.install();
 ```
 
 ### Shorten the script call

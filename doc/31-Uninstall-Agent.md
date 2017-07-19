@@ -9,11 +9,16 @@ Program Data directory from the system in which certificates and configurations 
 
 ### Full uninstallation
 
-This example will uninstall the Agent and remove the Program Data Directory as well. If you want to keep 
+This example will uninstall the Agent and remove the Program Data Directory as well. If you want to keep
 that, you can remove the argument '-FullUninstallation'
 
 ```powershell
     $icinga = Icinga2AgentModule -FullUninstallation $TRUE
 
-    exit $icinga.uninstallIcinga2Agent();         
+    exit $icinga.uninstall();
+```
+
+**Shorten the call**
+```powershell
+    exit Icinga2AgentModule -FullUninstallation $TRUE -RunUninstaller;
 ```

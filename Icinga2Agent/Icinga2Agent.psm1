@@ -2335,8 +2335,12 @@ object ApiListener "api" {
     # Deprecated function
     #
     $installer | Add-Member -membertype ScriptMethod -name 'installIcinga2Agent' -value {
-        $this.warn('The function "installIcinga2Agent" is deprecated and will be removed soon. Please use "installMonitoringComponents" instead.')
-        return $this.installMonitoringComponents();
+        $this.warn('The function "installIcinga2Agent" is deprecated and will be removed soon. Please use "install" instead.')
+        return $this.install();
+    }
+    $installer | Add-Member -membertype ScriptMethod -name 'installMonitoringComponents' -value {
+        $this.warn('The function "installMonitoringComponents" is deprecated and will be removed soon. Please use "install" instead.')
+        return $this.install();
     }
 
     #
@@ -2346,7 +2350,7 @@ object ApiListener "api" {
     # including download and update if
     # specified. Returnd 0 or 1 as exit code
     #
-    $installer | Add-Member -membertype ScriptMethod -name 'installMonitoringComponents' -value {
+    $installer | Add-Member -membertype ScriptMethod -name 'install' -value {
         try {
             if (-Not $this.isAdmin()) {
                 return 1;
@@ -2437,14 +2441,18 @@ object ApiListener "api" {
     # Deprecated function
     #
     $installer | Add-Member -membertype ScriptMethod -name 'uninstallIcinga2Agent' -value {
-        $this.warn('The function "uninstallIcinga2Agent" is deprecated and will be removed soon. Please use "uninstallMonitoringComponents" instead.')
-        return $this.uninstallMonitoringComponents();
+        $this.warn('The function "uninstallIcinga2Agent" is deprecated and will be removed soon. Please use "uninstall" instead.')
+        return $this.uninstall();
+    }
+    $installer | Add-Member -membertype ScriptMethod -name 'uninstallMonitoringComponents' -value {
+        $this.warn('The function "uninstallMonitoringComponents" is deprecated and will be removed soon. Please use "uninstall" instead.')
+        return $this.uninstall();
     }
 
     #
     # Removes the Icinga 2 Agent from the system
     #
-    $installer | Add-Member -membertype ScriptMethod -name 'uninstallMonitoringComponents' -value {
+    $installer | Add-Member -membertype ScriptMethod -name 'uninstall' -value {
         $this.info('Trying to locate Icinga 2 Agent...');
 
         if ($this.isAgentInstalled()) {
@@ -2499,11 +2507,11 @@ object ApiListener "api" {
     [int]$uninstallerExitCode = 0;
     # If flag RunUninstaller is set, do the uninstallation of the components
     if ($RunUninstaller) {
-        $uninstallerExitCode = $installer.uninstallMonitoringComponents();
+        $uninstallerExitCode = $installer.uninstall();
     }
     # If flag RunInstaller is set, do the installation of the components
     if ($RunInstaller) {
-        $installerExitCode = $installer.installMonitoringComponents();
+        $installerExitCode = $installer.install();
     }
     if ($RunInstaller -Or $RunUninstaller) {
         if ($installerExitCode -ne 0 -Or $uninstallerExitCode -ne 0) {
