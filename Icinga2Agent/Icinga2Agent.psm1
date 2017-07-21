@@ -994,7 +994,7 @@ function Icinga2AgentModule {
     # Api directory, but keep the folder structure
     #
     $installer | Add-Member -membertype ScriptMethod -name 'flushIcingaApiDirectory' -value {
-        if (Test-Path $this.getApiDirectory() -And $this.shouldFlushIcingaApiDirectory()) {
+        if ((Test-Path $this.getApiDirectory()) -And $this.shouldFlushIcingaApiDirectory()) {
             $this.info('Flushing content of ' + $this.getApiDirectory());
             [System.Object]$folder = New-Object -ComObject Scripting.FileSystemObject;
             $folder.DeleteFolder($this.getApiDirectory());
