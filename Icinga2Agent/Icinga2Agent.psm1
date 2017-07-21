@@ -2201,6 +2201,22 @@ object ApiListener "api" {
     }
 
     #
+    # Check if NSClient is installed on the system
+    #
+    $installer | Add-Member -membertype ScriptMethod -name 'isNSClientInstalled' -value {
+        $nsclient = Get-WmiObject -Class Win32_Product |
+                Where-Object {
+                    $_.Name -match 'NSClient*';
+                }
+
+        if ($nsclient -eq $null) {
+            return $FALSE;
+        }
+
+        return $TRUE;
+    }
+
+    #
     # Shall we install the NSClient as well on the system?
     # All possible actions are handeled here
     #
@@ -2209,23 +2225,31 @@ object ApiListener "api" {
         if ($this.config('install_nsclient')) {
 
             [string]$installerPath = $this.getNSClientInstallerPath();
-            $this.info('Trying to install NSClient++ from ' + $installerPath);
+            $this.info('Trying to install and configure NSClient++ from ' + $installerPath);
 
             # First check if the package does exist
             if (Test-Path ($installerPath)) {
 
-                # Get all required arguments for installing the NSClient unattended
-                [string]$NSClientArguments = $this.getNSClientInstallerArguments();
+                if ($this.isNSClientInstalled() -eq $FALSE) {
+                    # Get all required arguments for installing the NSClient unattended
+                    [string]$NSClientArguments = $this.getNSClientInstallerArguments();
 
-                # Start the installer process
-                $result = $this.startProcess('MsiExec.exe', $TRUE, '/quiet /i "' + $installerPath + '" ' + $NSClientArguments);
+                    # Start the installer process
+                    $result = $this.startProcess('MsiExec.exe', $TRUE, '/quiet /i "' + $installerPath + '" ' + $NSClientArguments);
 
-                # Exit Code 0 means the NSClient was installed successfully
-                # Otherwise we require to throw an error
-                if ($result.Get_Item('exitcode') -ne 0) {
-                    $this.exception('Failed to install NSClient++. ' + $result.Get_Item('message'));
+                    # Exit Code 0 means the NSClient was installed successfully
+                    # Otherwise we require to throw an error
+                    if ($result.Get_Item('exitcode') -ne 0) {
+                        $this.exception('Failed to install NSClient++. ' + $result.Get_Item('message'));
+                    } else {
+                        $this.info('NSClient++ successfully installed.');
+
+                        # To tell Icinga 2 we installed the NSClient and to make
+                        # the NSCPPath variable available, we require to restart Icinga 2
+                        $this.setProperty('require_restart', 'true');
+                    }
                 } else {
-                    $this.info('NSClient++ successfully installed.');
+                    $this.info('NSClient++ is already installed on the system.');
                 }
 
                 # If defined remove the Firewall Rule to secure the system
@@ -2235,9 +2259,6 @@ object ApiListener "api" {
                 $this.removeNSClientService();
                 # Add the default NSClient config if we want to do more
                 $this.addNSClientDefaultConfig();
-                # To tell Icinga 2 we installed the NSClient and to make
-                # the NSCPPath variable available, we require to restart Icinga 2
-                $this.setProperty('require_restart', 'true');
             } else {
                 $this.error('Failed to locate NSClient++ Installer at ' + $installerPath);
             }
