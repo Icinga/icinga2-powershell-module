@@ -994,11 +994,10 @@ function Icinga2AgentModule {
     # Api directory, but keep the folder structure
     #
     $installer | Add-Member -membertype ScriptMethod -name 'flushIcingaApiDirectory' -value {
-        if (Test-Path $this.getApiDirectory()) {
+        if (Test-Path $this.getApiDirectory() -And $this.shouldFlushIcingaApiDirectory()) {
             $this.info('Flushing content of ' + $this.getApiDirectory());
             [System.Object]$folder = New-Object -ComObject Scripting.FileSystemObject;
             $folder.DeleteFolder($this.getApiDirectory());
-            $this.setProperty('require_restart', 'true');
         }
     }
 
@@ -1603,6 +1602,8 @@ object ApiListener "api" {
         if ($this.hasConfigChanged() -And $this.getProperty('generate_config') -eq 'true') {
             $this.backupDefaultConfig();
             $this.writeConfig($this.getProperty('new_icinga_config'));
+
+            $this.flushIcingaApiDirectory();
 
             # Check if the config is valid and rollback otherwise
             if (-Not $this.isIcingaConfigValid()) {
@@ -2441,10 +2442,6 @@ object ApiListener "api" {
                 $this.generateCertificates();
             } else {
                 $this.info('Icinga 2 certificates already exist. Nothing to do.');
-            }
-
-            if ($this.shouldFlushIcingaApiDirectory()) {
-                $this.flushIcingaApiDirectory();
             }
 
             $this.generateIcingaConfiguration();
