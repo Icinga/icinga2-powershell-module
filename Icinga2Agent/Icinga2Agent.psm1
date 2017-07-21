@@ -1720,6 +1720,8 @@ object ApiListener "api" {
         if ($this.doLookupIPAddressesForHostname("")) {
             return;
         }
+
+        $this.exception('Failed to lookup any IP-Address for this host');
     }
 
     #
@@ -1735,7 +1737,7 @@ object ApiListener "api" {
             return $TRUE;
         } catch {
             # Write an error in case something went wrong
-            $this.error('Failed to lookup IP-Address with DNS-Lookup for ' + $hostname + ': ' + $_.Exception.Message);
+            $this.warn('Failed to lookup IP-Address with DNS-Lookup for ' + $hostname + ': ' + $_.Exception.Message);
         }
         return $FALSE;
     }
