@@ -725,7 +725,14 @@ function Icinga2AgentModule {
         # By default, install the Icinga 2 Agent again in the pre-installed directory
         # before the update. Will only apply during updates / downgrades of the Agent
         if ($this.getProperty('cur_install_dir')) {
-            $installerLocation = [string]::Format(' INSTALL_ROOT="{0}"', $this.getProperty('cur_install_dir'));
+            # In case we perform an architecture change, we should use the new default location as source in case
+            # we have installed the Agent into Program Files (x86) for example but are now using a x64 Agent
+            # which should be installed into Program Files instead
+            if ($this.getProperty('agent_architecture_change') -And $this.getProperty('agent_migration_target')) {
+                $installerLocation = [string]::Format(' INSTALL_ROOT="{0}"', $this.getProperty('agent_migration_target'));
+            } else {
+                $installerLocation = [string]::Format(' INSTALL_ROOT="{0}"', $this.getProperty('cur_install_dir'));
+            }
         }
 
         # However, if we specified a custom directory over the argument, always use that
@@ -738,6 +745,54 @@ function Icinga2AgentModule {
         $arguments += $installerLocation;
 
         return $arguments;
+    }
+
+    #
+    # Do we require to migrate data from previous Icinga 2 Agent Directory
+    #
+    $installer | Add-Member -membertype ScriptMethod -name 'checkForIcingaMigrationRequirement' -value {
+        if ($this.getProperty('cur_install_dir')) {
+            [string]$installDir = $this.getProperty('cur_install_dir');
+            # Just in case we installed an x86 Agent on the System, we will require to migrate to x64 on a x64 system.
+            if (${Env:ProgramFiles(x86)} -And $installDir.contains(${Env:ProgramFiles(x86)}) -And $this.getProperty('system_architecture') -eq 'x86_64') {
+                [string]$migrationPath = $installDir.Replace(${Env:ProgramFiles(x86)}, ${Env:ProgramFiles});
+                $this.setProperty('agent_architecture_change', $TRUE);
+                $this.setProperty('require_migration', $TRUE);
+                $this.setProperty('agent_migration_source', $installDir);
+                $this.setProperty('agent_migration_target', $migrationPath);
+                $this.setProperty('cur_install_dir', $migrationPath);
+                $this.warn('Detected architecture change. Current installed Agent version is x86, while new installed version will be x64. Possible data will be migrated.');
+            } else {
+                $this.setProperty('agent_migration_source', $this.getProperty('cur_install_dir'));
+            }
+        }
+
+        if ($this.config('agent_install_directory')) {
+            [string]$currentInstallDir = $this.cutLastSlashFromDirectoryPath($this.getProperty('cur_install_dir'));
+            [string]$intendedInstallDir = $this.cutLastSlashFromDirectoryPath($this.config('agent_install_directory'));
+
+            if ($currentInstallDir -ne $intendedInstallDir) {
+                $this.setProperty('agent_migration_target', $this.config('agent_install_directory'));
+                $this.setProperty('require_migration', $TRUE);
+            }
+        }
+    }
+
+    #
+    # To ensure we handle path strings correctly, we always require to cut the last \
+    #
+    $installer | Add-Member -membertype ScriptMethod -name 'cutLastSlashFromDirectoryPath' -value {
+        param([string]$path);
+
+        if (-Not $path -Or $path -eq '') {
+            return $path;
+        }
+
+        if ($path[$path.Length - 1] -eq '\') {
+            $path = $path.Substring(0, $path.Length - 1);
+        }
+
+        return $path;
     }
 
     #
@@ -794,6 +849,9 @@ function Icinga2AgentModule {
             $this.info('Icinga 2 Agent successfully removed.');
         }
 
+        $this.checkForIcingaMigrationRequirement();
+        $this.applyPossibleAgentMigration();
+
         $this.info('Installing new Icinga 2 Agent version...');
         # Start the installer process
         $result = $this.startProcess('MsiExec.exe', $TRUE, [string]::Format('/quiet /i "{0}" {1}', $this.getInstallerPath(), $this.getIcingaAgentInstallerArguments()));
@@ -807,6 +865,62 @@ function Icinga2AgentModule {
         }
 
         $this.setProperty('require_restart', 'true');
+    }
+
+    #
+    # Migrate a folder and it's content from a previous Agent installation to
+    # a new target destination
+    #
+    $installer | Add-Member -membertype ScriptMethod -name 'doMigrateIcingaDirectory' -value {
+        param([string]$sourcePath, [string]$targetPath, [string]$directory);
+
+        if (Test-Path (Join-Path -Path $sourcePath -ChildPath $directory)) {
+            [string]$source = Join-Path -Path $sourcePath -ChildPath $directory;
+            [string]$target = Join-Path -Path $targetPath -ChildPath $directory;
+            $this.info([string]::Format('Migrating content from "{0}" to "{1}"', $source, $target));
+            $result = Copy-Item $source $target -Recurse;
+        }
+    }
+
+    #
+    # Copy a single file from it's source location to our target location
+    #
+    $installer | Add-Member -membertype ScriptMethod -name 'doMigrateIcingaFile' -value {
+        param([string]$sourcePath, [string]$targetPath, [string]$file);
+        $this.info([string]::Format('Migrating file from "{0}" to "{1}\{2}"', $sourcePath, $targetPath, $_));
+        Copy-Item $sourcePath $targetPath;
+    }
+
+    #
+    # This function will determine if we require to migrate content from a previous
+    # Icinga 2 Agent installation to the new location
+    #
+    $installer | Add-Member -membertype ScriptMethod -name 'applyPossibleAgentMigration' -value {
+        if (-Not $this.getProperty('require_migration') -Or $this.getProperty('require_migration') -eq $FALSE) {
+            $this.info('No migration of Icinga 2 Agent data required.')
+            return;
+        }
+
+        $this.info([string]::Format('Icinga 2 Agent installation location changed from {0} to {1}. Migrating possible content...', $this.getProperty('agent_migration_source'), $this.getProperty('agent_migration_target')));
+
+        if ($this.getProperty('agent_migration_source') -And (Test-Path ($this.getProperty('agent_migration_source')))) {
+            # Load Directories and Remove \ at the end of the path if present to ensure we have the same path base
+            [string]$sourcePath = $this.cutLastSlashFromDirectoryPath($this.getProperty('agent_migration_source'));
+            [string]$targetPath = $this.cutLastSlashFromDirectoryPath($this.getProperty('agent_migration_target'));
+
+            # Get all objects within our source root and copy it to our target destination
+            $result = Get-ChildItem -Path $sourcePath |
+                ForEach-Object {
+                    if ($_.PSIsContainer) {
+                        $this.doMigrateIcingaDirectory($sourcePath, $targetPath, $_);
+                    } else {
+                        $this.doMigrateIcingaFile($_.FullName, $targetPath, $_);
+                    }
+                }
+            $this.info([string]::Format('Migration of source folder applied. Please remove content from previous directory {0} if no longer required.', $sourcePath));
+        } else {
+            $this.info('No data for migration found. Setup is clean.');
+        }
     }
 
     #
@@ -844,6 +958,7 @@ function Icinga2AgentModule {
         $this.setProperty('cur_install_dir', $localData.InstallLocation);
         $this.setProperty('agent_version', $localData.DisplayVersion);
         $this.setProperty('install_msi_package', 'Icinga2-v' + $this.config('agent_version') + '-' + $architecture + '.msi');
+        $this.setProperty('system_architecture', $architecture);
 
         if ($localData.InstallLocation) {
             $this.info('Found Icinga 2 Agent version ' + $localData.DisplayVersion + ' installed at ' + $localData.InstallLocation);
