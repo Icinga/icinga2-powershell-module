@@ -60,6 +60,7 @@ function Icinga2AgentModule {
         #Internal handling
         [switch]$RunInstaller             = $FALSE,
         [switch]$RunUninstaller           = $FALSE,
+        [switch]$IgnoreSSLErrors          = $FALSE,
         [bool]$DebugMode                  = $FALSE,
         [string]$ModuleLogFile
     );
@@ -110,6 +111,7 @@ function Icinga2AgentModule {
         nsclient_installer_path = $NSClientInstallerPath;
         full_uninstallation     = $FullUninstallation;
         remove_nsclient         = $RemoveNSClient;
+        ignore_ssl_errors       = $IgnoreSSLErrors;
         debug_mode              = $DebugMode;
         module_log_file         = $ModuleLogFile;
     }
@@ -520,6 +522,13 @@ function Icinga2AgentModule {
         }
         $httpRequest.TimeOut = 6000;
 
+        # If we are using self-signed certificates for example, the HTTP request will
+        # fail caused by the SSL certificate. With this we can allow even faulty
+        # certificates. This should be used with caution
+        if ($this.config('ignore_ssl_errors')) {
+            [System.Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }
+        }
+
         if ($this.config('director_user') -And $this.config('director_password')) {
             [string]$credentials = [System.Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($this.config('director_user') + ':' + $this.config('director_password')));
             $httpRequest.Headers.add('Authorization: Basic ' + $credentials);
@@ -550,8 +559,11 @@ function Icinga2AgentModule {
             }
 
             $exceptionMessage = $_.Exception.Response;
-            $httpErrorCode = [int][system.net.httpstatuscode]$exceptionMessage.StatusCode;
-            return $httpErrorCode;
+            if ($exceptionMessage.StatusCode) {
+                return [int][System.Net.HttpStatusCode]$exceptionMessage.StatusCode;
+            } else {
+                return 900;
+            }
         }
 
         return '';
@@ -562,13 +574,19 @@ function Icinga2AgentModule {
     #
     $installer | Add-Member -membertype ScriptMethod -name 'readResponseStream' -value {
         param([System.Object]$response);
-        $responseStream = $response.getResponseStream();
-        $streamReader = New-Object IO.StreamReader($responseStream);
-        $result = $streamReader.ReadToEnd();
-        $response.close()
-        $streamReader.close()
 
-        return $result;
+        if ($response) {
+            $responseStream = $response.getResponseStream();
+            $streamReader = New-Object IO.StreamReader($responseStream);
+            $result = $streamReader.ReadToEnd();
+            $response.close()
+            $streamReader.close()
+
+            return $result;
+        }
+
+        $this.exception('Could not retreive response from remote server. Response is null');
+        return 'No response from remote server';
     }
 
     #

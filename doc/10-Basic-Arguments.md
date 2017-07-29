@@ -328,3 +328,21 @@ Which has in the result the same effect.
 
 **NOTE:** You can also combine both arguments *-RunInstaller* and *-RunUninstaller* in the same
 call. The **uninstaller** function is **always called before** to the **installation** function.
+
+## -IgnoreSSLErrors (optional)
+
+In certain cases it could be required to ingore SSL certificate validations from the
+Icinga Web 2 installation (for example in case self-signed certificates are used). By default
+the PowerShell Module is validating SSL certificates and throws an error if the validation fails.
+
+In case self-signed certificates are used and not included to the local certificate store
+of the Windows machine, the module will fail. By providing this argument, validation will
+always be valid and the script will execute as if the certificate was valid.
+
+**Example:**
+```powershell
+    exit Icinga2AgentModule
+              -DirectorUrl       'https://icinga2-master.example.com/icingaweb2/director/' `
+              -DirectorAuthToken '34086b3480965b083476c08346c34980' `
+              -IgnoreSSLErrors `
+              -RunInstaller;
