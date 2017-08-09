@@ -1874,22 +1874,22 @@ object ApiListener "api" {
         # First execute nslookup for your FQDN and hostname to check if this
         # host is registered and receive it's IP address
         [System.Collections.Hashtable]$fqdnLookup = $this.startProcess('nslookup.exe', $TRUE, $this.getProperty('fqdn'));
-        [System.Collections.Hashtable]$hostanmeLookup = $this.startProcess('nslookup.exe', $TRUE, $this.getProperty('hostname'));
+        [System.Collections.Hashtable]$hostnameLookup = $this.startProcess('nslookup.exe', $TRUE, $this.getProperty('hostname'));
 
         # Now get the message of our result we should work with (nslookup output)
         [string]$fqdnLookup = $fqdnLookup.Get_Item('message');
-        [string]$hostanmeLookup = $hostanmeLookup.Get_Item('message');
+        [string]$hostnameLookup = $hostnameLookup.Get_Item('message');
         # Get our basic IP first
         [string]$usedIP = $this.getProperty('ipaddress');
 
         # First try to lookup the basic address. If it is not contained, look further
-        if ($this.isIPv4AddressInsideLookup($fqdnLookup, $hostanmeLookup, $usedIP) -eq $FALSE) {
+        if ($this.isIPv4AddressInsideLookup($fqdnLookup, $hostnameLookup, $usedIP) -eq $FALSE) {
             [int]$ipCount = $this.getProperty('ipv4_count');
             [bool]$found = $FALSE;
             # Loop through all found IPv4 IP's and try to locate the correct one
             for ($index = 0; $index -lt $ipCount; $index++) {
                 $usedIP = $this.getProperty('ipaddress[' + $index + ']');
-                if ($this.isIPv4AddressInsideLookup($fqdnLookup, $hostanmeLookup, $usedIP)) {
+                if ($this.isIPv4AddressInsideLookup($fqdnLookup, $hostnameLookup, $usedIP)) {
                     # Swap IP values once we found a match and exit this loop
                     $this.setProperty('ipaddress[' + $index + ']', $this.getProperty('ipaddress'));
                     $this.setProperty('ipaddress', $usedIP);
@@ -1913,7 +1913,7 @@ object ApiListener "api" {
     $installer | Add-Member -membertype ScriptMethod -name 'isIPv4AddressInsideLookup' -value {
         param([string]$fqdnLookup, [string]$hostnameLookup, [string]$ipv4Address);
 
-        if ($fqdnLookup.Contains($ipv4Address) -Or $hostanmeLookup.Contains($ipv4Address)) {
+        if ($fqdnLookup.Contains($ipv4Address) -Or $hostnameLookup.Contains($ipv4Address)) {
             return $TRUE;
         }
 
