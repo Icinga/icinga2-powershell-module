@@ -201,7 +201,8 @@ function Icinga2AgentModule {
     # purposes
     #
     $installer | Add-Member -membertype ScriptMethod -name 'dumpProperties' -value {
-        Write-Output $this.properties;
+        [string]$dumpData = $this.properties | Out-String;
+        write-host $dumpData;
     }
 
     #
