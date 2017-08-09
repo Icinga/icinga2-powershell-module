@@ -205,6 +205,14 @@ function Icinga2AgentModule {
     }
 
     #
+    # Dump all configured arguments for easier debugging
+    #
+    $installer | Add-Member -membertype ScriptMethod -name 'dumpConfig' -value {
+        [string]$dumpData = $this.cfg | Out-String;
+        write-host $dumpData;
+    }
+
+    #
     # Write all output from consoles to a logfile
     #
     $installer | Add-Member -membertype ScriptMethod -name 'writeLogFile' -value {
