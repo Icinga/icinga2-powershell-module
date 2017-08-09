@@ -1867,6 +1867,60 @@ object ApiListener "api" {
     }
 
     #
+    # This function will try to locate the IPv4 address used
+    # for communicating with the network
+    #
+    $installer | Add-Member -membertype ScriptMethod -name 'lookupPrimaryIPv4Address' -value {
+        # First execute nslookup for your FQDN and hostname to check if this
+        # host is registered and receive it's IP address
+        [System.Collections.Hashtable]$fqdnLookup = $this.startProcess('nslookup.exe', $TRUE, $this.getProperty('fqdn'));
+        [System.Collections.Hashtable]$hostanmeLookup = $this.startProcess('nslookup.exe', $TRUE, $this.getProperty('hostname'));
+
+        # Now get the message of our result we should work with (nslookup output)
+        [string]$fqdnLookup = $fqdnLookup.Get_Item('message');
+        [string]$hostanmeLookup = $hostanmeLookup.Get_Item('message');
+        # Get our basic IP first
+        [string]$usedIP = $this.getProperty('ipaddress');
+
+        # First try to lookup the basic address. If it is not contained, look further
+        if ($this.isIPv4AddressInsideLookup($fqdnLookup, $hostanmeLookup, $usedIP) -eq $FALSE) {
+            [int]$ipCount = $this.getProperty('ipv4_count');
+            [bool]$found = $FALSE;
+            # Loop through all found IPv4 IP's and try to locate the correct one
+            for ($index = 0; $index -lt $ipCount; $index++) {
+                $usedIP = $this.getProperty('ipaddress[' + $index + ']');
+                if ($this.isIPv4AddressInsideLookup($fqdnLookup, $hostanmeLookup, $usedIP)) {
+                    # Swap IP values once we found a match and exit this loop
+                    $this.setProperty('ipaddress[' + $index + ']', $this.getProperty('ipaddress'));
+                    $this.setProperty('ipaddress', $usedIP);
+                    $found = $TRUE;
+                    break;
+                }
+            }
+
+            if ($found -eq $FALSE) {
+                $this.warn([string]::Format('Failed to lookup primary IP for this host. Unable to match nslookup against any IPv4 addresses on this system. Using {0} as default now. Access it with &ipaddress& for all JSON requests.', $this.getProperty('ipaddress')));
+                return;
+            }
+        }
+
+        $this.info([string]::Format('Setting IP {0} as primary IP for this host for all requests. Access it with &ipaddress& for all JSON requests.', $usedIP));
+    }
+
+    #
+    # Check if inside our lookup the IP-Address is found
+    #
+    $installer | Add-Member -membertype ScriptMethod -name 'isIPv4AddressInsideLookup' -value {
+        param([string]$fqdnLookup, [string]$hostnameLookup, [string]$ipv4Address);
+
+        if ($fqdnLookup.Contains($ipv4Address) -Or $hostanmeLookup.Contains($ipv4Address)) {
+            return $TRUE;
+        }
+
+        return $FALSE;
+    }
+
+    #
     # Add all found IP-Addresses to our property array
     #
     $installer | Add-Member -membertype ScriptMethod -name 'doLookupIPAddressesForHostname' -value {
@@ -1913,6 +1967,8 @@ object ApiListener "api" {
                 $ipV6Index += 1;
             }
         }
+        $this.setProperty('ipv4_count', $ipV4Index);
+        $this.setProperty('ipv6_count', $ipV6Index);
     }
 
     #
@@ -2250,7 +2306,7 @@ object ApiListener "api" {
         [string]$key = $this.getProperty('director_host_token');
 
         # In case we are not having the Host-Api-Key already, use the value from the argument
-        if($globalConfig -eq $TRUE) {
+        if ($globalConfig -eq $TRUE) {
              $key = $this.config('director_auth_token');
         }
 
@@ -2567,6 +2623,8 @@ object ApiListener "api" {
             $this.fetchHostnameOrFQDN();
             # Get IP-Address of host
             $this.fetchHostIPAddress();
+            # Try to locate the primary IP Address
+            $this.lookupPrimaryIPv4Address();
             # Transform the hostname if required
             $this.doTransformHostname();
             # Try to create a host object inside the Icinga Director
