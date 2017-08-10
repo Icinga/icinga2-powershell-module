@@ -456,7 +456,6 @@ function Icinga2AgentModule {
             $this.setProperty('endpoint_objects', $endpoint_objects);
             $this.setProperty('generate_config', 'true');
         } else {
-            $this.info('Argument -ParendEndpoints is not set or values not pushed from Icinga Director. The icinga2.conf will not be generated.');
             $this.setProperty('generate_config', 'false');
         }
     }
@@ -1445,6 +1444,7 @@ object ApiListener "api" {
     $installer | Add-Member -membertype ScriptMethod -name 'hasConfigChanged' -value {
 
         if ($this.getProperty('generate_config') -eq 'false') {
+            $this.info('Argument -ParendEndpoints is not set or values not pushed from Icinga Director. The icinga2.conf will not be generated.');
             return $FALSE;
         }
         if (-Not $this.getProperty('new_icinga_config')) {
