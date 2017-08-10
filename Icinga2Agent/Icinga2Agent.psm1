@@ -456,6 +456,7 @@ function Icinga2AgentModule {
             $this.setProperty('endpoint_objects', $endpoint_objects);
             $this.setProperty('generate_config', 'true');
         } else {
+            $this.info('Argument -ParendEndpoints is not set or values not pushed from Icinga Director. The icinga2.conf will not be generated.');
             $this.setProperty('generate_config', 'false');
         }
     }
