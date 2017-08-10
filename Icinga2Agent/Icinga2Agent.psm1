@@ -1438,7 +1438,6 @@ object ApiListener "api" {
     $installer | Add-Member -membertype ScriptMethod -name 'hasConfigChanged' -value {
 
         if ($this.getProperty('generate_config') -eq 'false') {
-            $this.info('Argument -ParentEndpoints is not set or values not pushed from Icinga Director. The icinga2.conf will not be generated.');
             return $FALSE;
         }
         if (-Not $this.getProperty('new_icinga_config')) {
@@ -1570,9 +1569,17 @@ object ApiListener "api" {
             $this.info("Requesting Icinga 2 certificates");
             $result = $this.startProcess($icingaBinary, $FALSE, 'pki request --host ' + $this.config('ca_server') + ' --port ' + $this.config('ca_port') + ' --ticket ' + $this.getProperty('icinga_ticket') + ' --key ' + $icingaPkiDir + $agentName + '.key --cert ' + $icingaPkiDir + $agentName + '.crt --trustedcert ' + $icingaPkiDir + 'trusted-master.crt --ca ' + $icingaPkiDir + 'ca.crt');
             if ($result.Get_Item('exitcode') -ne 0) {
+                if ($this.getProperty('agent_name_change')) {
+                    $this.exception('You have changed the naming of the Agent (upper / lower case) and therefor your certificates are no longer valid. Certificate generation failed because of a possible wrong ticket. Please ensure to set the "hostname" within the Icinga 2 configuration correctly and re-run this script.');
+                }
                 throw $result.Get_Item('message');
             }
             $this.info($result.Get_Item('message'));
+
+            # Rename the certificates to apply possible upper / lower case naming chanes
+            # which is not done by Windows by default
+            Move-Item (Join-Path -Path $icingaPkiDir -ChildPath ($agentName + '.key')) (Join-Path -Path $icingaPkiDir -ChildPath ($agentName + '.key'))
+            Move-Item (Join-Path -Path $icingaPkiDir -ChildPath ($agentName + '.crt')) (Join-Path -Path $icingaPkiDir -ChildPath ($agentName + '.crt'))
 
             $this.setProperty('require_restart', 'true');
         } else  {
@@ -1612,14 +1619,38 @@ object ApiListener "api" {
     $installer | Add-Member -membertype ScriptMethod -name 'hasCertificates' -value {
         [string]$icingaPkiDir = Join-Path -Path $this.getProperty('config_dir') -ChildPath 'pki';
         [string]$agentName = $this.getProperty('local_hostname');
+        [bool]$filesExist = $FALSE;
+        # First check if the files in generell exist
         if (
             ((Test-Path ((Join-Path -Path $icingaPkiDir -ChildPath $agentName) + '.key'))) `
             -And (Test-Path ((Join-Path -Path $icingaPkiDir -ChildPath $agentName) + '.crt')) `
             -And (Test-Path (Join-Path -Path $icingaPkiDir -ChildPath 'ca.crt'))
         ) {
-            return $TRUE;
+            $filesExist = $TRUE;
         }
-        return $FALSE;
+
+        # In case they do, check if the characters (upper / lowercase) are matching as well
+        if ($filesExist -eq $TRUE) {
+
+            [string]$hostCRT = $agentName + '.crt';
+            [string]$hostKEY = $agentName + '.key';
+
+            # Get all files inside your PKIU directory
+            $certificates = Get-ChildItem -Path $icingaPkiDir;
+            # Now loop each file and match their name with our hostname
+            foreach ($cert in $certificates) {
+                if($cert.Name.toLower() -eq $hostCRT.toLower() -Or $cert.Name.toLower() -eq $hostKEY.toLower()) {
+                    $file = $cert.Name.Replace('.key', '').Replace('.crt', '');
+                    if (-Not ($file -clike $agentName)) {
+                        $this.warn([string]::Format('Certificate file {0} is not matching the hostname {1}. Certificate generation is required.', $cert.Name, $agentName));
+                        $this.setProperty('agent_name_change', $true);
+                        return $FALSE;
+                    }
+                }
+            }
+        }
+
+        return $filesExist;
     }
 
     #
