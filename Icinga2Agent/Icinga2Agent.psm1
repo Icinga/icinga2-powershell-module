@@ -1444,7 +1444,7 @@ object ApiListener "api" {
     $installer | Add-Member -membertype ScriptMethod -name 'hasConfigChanged' -value {
 
         if ($this.getProperty('generate_config') -eq 'false') {
-            $this.info('Argument -ParendEndpoints is not set or values not pushed from Icinga Director. The icinga2.conf will not be generated.');
+            $this.info('Argument -ParentEndpoints is not set or values not pushed from Icinga Director. The icinga2.conf will not be generated.');
             return $FALSE;
         }
         if (-Not $this.getProperty('new_icinga_config')) {
