@@ -297,13 +297,7 @@ function Icinga2AgentModule {
     # from the stack
     #
     $installer | Add-Member -membertype ScriptMethod -name 'printLastException' -value {
-        # Todo: Improve this entire handling
-        #       for writing exception messages
-        #       in general we should only see
-        #       the actual thrown error instead of
-        #       an stack trace where the error occured
-        #Write-Host $this.error($error[$error.count - 1].FullyQualifiedErrorId) -ForegroundColor red;
-        Write-Host $_.Exception.Message -ForegroundColor red;
+        $this.exception($_.Exception.Message);
     }
 
     #
