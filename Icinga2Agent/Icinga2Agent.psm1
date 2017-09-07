@@ -2349,7 +2349,6 @@ object ApiListener "api" {
             if ($this.isHTTPResponseCode($argumentString) -eq $FALSE) {
                 # First split the entire result based in new-lines into an array
                 [array]$arguments = $argumentString.Split("`n");
-                $config = @{};
 
                 # Now loop all elements and construct a dictionary for all values
                 foreach ($item in $arguments) {
