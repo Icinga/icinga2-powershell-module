@@ -1150,7 +1150,7 @@ function Icinga2AgentModule {
         [System.Object]$currentUser = Get-WMIObject win32_service -Filter "Name='icinga2'";
         [string]$credentials = $this.config('icinga_service_user');
         [string]$newUser = '';
-        [string]$password = 'dummy';
+        [string]$password = '';
 
         if ($currentUser -eq $null) {
             $this.warn('Unable to modify Icinga service user: Service not found.');
@@ -1162,7 +1162,7 @@ function Icinga2AgentModule {
         if ($credentials.Contains(':')) {
             [int]$delimeter = $credentials.IndexOf(':');
             $newUser = $credentials.Substring(0, $delimeter);
-            $password = $credentials.Substring($delimeter + 1, $credentials.Length - 1 - $delimeter);
+            $password = ' password=' + $credentials.Substring($delimeter + 1, $credentials.Length - 1 - $delimeter);
         } else {
             $newUser = $credentials;
         }
@@ -1176,7 +1176,7 @@ function Icinga2AgentModule {
         # Try to update the service name and return an error in case of a failure
         # In the error case we do not have to deal with cleanup, as no change was made anyway
         $this.info('Updating Icinga 2 service user to ' + $newUser);
-        $result = $this.startProcess('sc.exe', $TRUE, 'config icinga2 obj="' + $newUser + '" ' + 'password=' + $password);
+        $result = $this.startProcess('sc.exe', $TRUE, 'config icinga2 obj="' + $newUser + '"' + $password);
 
         if ($result.Get_Item('exitcode') -ne 0) {
             $this.error($result.Get_Item('message'));
@@ -1196,7 +1196,7 @@ function Icinga2AgentModule {
         if ($result.Get_Item('exitcode') -ne 0) {
             $this.error($result.Get_Item('message'));
             $this.info('Reseting user to previous working user ' + $currentUser.StartName);
-            $result = $this.startProcess('sc.exe', $TRUE, 'config icinga2 obj="' + $currentUser.StartName + '" ' + 'password=' + $password);
+            $result = $this.startProcess('sc.exe', $TRUE, 'config icinga2 obj="' + $currentUser.StartName + '"' + $password);
             $result = $this.restartService('icinga2');
             if ($result.Get_Item('exitcode') -ne 0) {
                 $this.error('Failed to reset Icinga 2 service user to the previous user ' + $currentUser.StartName + '. Setting user to "LocalSystem" now to ensure the service integrity');
