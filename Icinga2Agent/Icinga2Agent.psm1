@@ -2353,23 +2353,28 @@ object ApiListener "api" {
                 # Now loop all elements and construct a dictionary for all values
                 foreach ($item in $arguments) {
                     if ($item.Contains(':')) {
+                        $this.debug([string]::Format('Processing Director API config argument "{0}"', $item));
                         [int]$argumentPos = $item.IndexOf(":");
-                        [string]$argument = $item.Substring(0, $argumentPos)
-                        [string]$value = $item.Substring($argumentPos + 2, $item.Length - 2 - $argumentPos);
-                        $value = $value.Replace("`r", '');
-                        $value = $value.Replace("`n", '');
+                        [string]$argument = $item.Substring(0, $argumentPos);
+                        if (($argumentPos + 2) -le $item.Length) {
+                            [string]$value = $item.Substring($argumentPos + 2, $item.Length - 2 - $argumentPos);
+                            $value = $value.Replace("`r", '');
+                            $value = $value.Replace("`n", '');
 
-                        if ($value.Contains( '!')) {
-                            [array]$valueArray = $value.Split('!');
-                            $this.overrideConfig($argument, $valueArray);
-                        } else {
-                            if ($value.toLower() -eq 'true') {
-                                $this.overrideConfig($argument, $TRUE);
-                            } elseif ($value.toLower() -eq 'false') {
-                                $this.overrideConfig($argument, $FALSE);
+                            if ($value.Contains( '!')) {
+                                [array]$valueArray = $value.Split('!');
+                                $this.overrideConfig($argument, $valueArray);
                             } else {
-                                $this.overrideConfig($argument, $value);
+                                if ($value.toLower() -eq 'true') {
+                                    $this.overrideConfig($argument, $TRUE);
+                                } elseif ($value.toLower() -eq 'false') {
+                                    $this.overrideConfig($argument, $FALSE);
+                                } else {
+                                    $this.overrideConfig($argument, $value);
+                                }
                             }
+                        } else {
+                            $this.debug([string]::Format('Got key argument "{0}" without a value.', $argument));
                         }
                     }
                 }
