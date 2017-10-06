@@ -1635,11 +1635,11 @@ object ApiListener "api" {
             [string]$hostCRT = $agentName + '.crt';
             [string]$hostKEY = $agentName + '.key';
 
-            # Get all files inside your PKIU directory
+            # Get all files inside your PKI directory
             $certificates = Get-ChildItem -Path $icingaPkiDir;
             # Now loop each file and match their name with our hostname
             foreach ($cert in $certificates) {
-                if($cert.Name.toLower() -eq $hostCRT.toLower() -Or $cert.Name.toLower() -eq $hostKEY.toLower()) {
+                if ($cert.Name.toLower() -eq $hostCRT.toLower() -Or $cert.Name.toLower() -eq $hostKEY.toLower()) {
                     $file = $cert.Name.Replace('.key', '').Replace('.crt', '');
                     if (-Not ($file -clike $agentName)) {
                         $this.warn([string]::Format('Certificate file {0} is not matching the hostname {1}. Certificate generation is required.', $cert.Name, $agentName));
@@ -2399,6 +2399,7 @@ object ApiListener "api" {
                 [string]$httpResponse = $this.createHTTPRequest($url, '', 'POST', 'application/json', $TRUE, $TRUE);
                 if ($this.isHTTPResponseCode($httpResponse) -eq $FALSE) {
                     $this.setProperty('icinga_ticket', $httpResponse);
+                    $this.info([string]::Format('Fetched ticket "{0}" from Icinga Director', $httpResponse));
                 } else {
                     $this.error('Failed to fetch Ticket from Icinga Director. Error response ' + $httpResponse);
                 }
