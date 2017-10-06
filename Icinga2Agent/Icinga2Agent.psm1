@@ -202,7 +202,8 @@ function Icinga2AgentModule {
     #
     $installer | Add-Member -membertype ScriptMethod -name 'dumpProperties' -value {
         [string]$dumpData = $this.properties | Out-String;
-        write-host $dumpData;
+        $this.debug('Dumping properties...');
+        $this.debug($dumpData);
     }
 
     #
@@ -210,7 +211,8 @@ function Icinga2AgentModule {
     #
     $installer | Add-Member -membertype ScriptMethod -name 'dumpConfig' -value {
         [string]$dumpData = $this.cfg | Out-String;
-        write-host $dumpData;
+        $this.debug('Dumping config...');
+        $this.debug($dumpData);
     }
 
     #
@@ -273,6 +275,9 @@ function Icinga2AgentModule {
     #
     $installer | Add-Member -membertype ScriptMethod -name 'getScriptExitCode' -value {
         [array]$exceptions = $this.getProperty('exception_messages');
+
+        $this.dumpProperties();
+        $this.dumpConfig();
 
         if ($exceptions -eq $null) {
             return 0;
@@ -1635,11 +1640,11 @@ object ApiListener "api" {
             [string]$hostCRT = $agentName + '.crt';
             [string]$hostKEY = $agentName + '.key';
 
-            # Get all files inside your PKI directory
+            # Get all files inside your PKIU directory
             $certificates = Get-ChildItem -Path $icingaPkiDir;
             # Now loop each file and match their name with our hostname
             foreach ($cert in $certificates) {
-                if ($cert.Name.toLower() -eq $hostCRT.toLower() -Or $cert.Name.toLower() -eq $hostKEY.toLower()) {
+                if($cert.Name.toLower() -eq $hostCRT.toLower() -Or $cert.Name.toLower() -eq $hostKEY.toLower()) {
                     $file = $cert.Name.Replace('.key', '').Replace('.crt', '');
                     if (-Not ($file -clike $agentName)) {
                         $this.warn([string]::Format('Certificate file {0} is not matching the hostname {1}. Certificate generation is required.', $cert.Name, $agentName));
