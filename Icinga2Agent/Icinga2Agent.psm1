@@ -1137,8 +1137,10 @@ function Icinga2AgentModule {
     $installer | Add-Member -membertype ScriptMethod -name 'flushIcingaApiDirectory' -value {
         if ((Test-Path $this.getApiDirectory()) -And $this.shouldFlushIcingaApiDirectory()) {
             $this.info('Flushing content of ' + $this.getApiDirectory());
+            $this.stopIcingaService();
             [System.Object]$folder = New-Object -ComObject Scripting.FileSystemObject;
             $folder.DeleteFolder($this.getApiDirectory());
+            $this.setProperty('require_restart', 'true');
         }
     }
 
@@ -1245,6 +1247,19 @@ function Icinga2AgentModule {
         }
 
         return $result;
+    }
+
+    #
+    # Function to stop the Icinga 2 service
+    #
+    $installer | Add-Member -membertype ScriptMethod -name 'stopIcingaService' -value {
+        # Stop the Icinga 2 Service
+        $this.info('Stopping the Icinga 2 Service...')
+        $result = $this.startProcess("sc.exe", $TRUE, "stop icinga2");
+
+        # Wait until the service is stopped
+        $serviceResult = $this.waitForServiceToReachState('icinga2', 'Stopped');
+        $this.info('Icinga 2 service has been stopped.')
     }
 
     #
@@ -1775,8 +1790,6 @@ object ApiListener "api" {
         if ($this.hasConfigChanged() -And $this.getProperty('generate_config') -eq 'true') {
             $this.backupDefaultConfig();
             $this.writeConfig($this.getProperty('new_icinga_config'));
-
-            $this.flushIcingaApiDirectory();
 
             # Check if the config is valid and rollback otherwise
             if (-Not $this.isIcingaConfigValid()) {
@@ -2731,6 +2744,11 @@ object ApiListener "api" {
             $this.createHostInsideIcingaDirector();
             # First check if we should get some parameters from the Icinga Director
             $this.fetchTicketFromIcingaDirector();
+            # Before we continue, flush the API Directory if specified. This will require
+            # us to stop the Icinga 2 Agent, but should prevent any false positive in
+            # case dependencies within the API Director are no longer pressent and will
+            # ensure a possible config rollback is working as intended as well
+            $this.flushIcingaApiDirectory();
 
             # Try to locate the current
             # Installation data from the Agent
