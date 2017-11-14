@@ -1644,7 +1644,7 @@ object ApiListener "api" {
             $certificates = Get-ChildItem -Path $icingaPkiDir;
             # Now loop each file and match their name with our hostname
             foreach ($cert in $certificates) {
-                if($cert.Name.toLower() -eq $hostCRT.toLower() -Or $cert.Name.toLower() -eq $hostKEY.toLower()) {
+                if ($cert.Name.toLower() -eq $hostCRT.toLower() -Or $cert.Name.toLower() -eq $hostKEY.toLower()) {
                     $file = $cert.Name.Replace('.key', '').Replace('.crt', '');
                     if (-Not ($file -clike $agentName)) {
                         $this.warn([string]::Format('Certificate file {0} is not matching the hostname {1}. Certificate generation is required.', $cert.Name, $agentName));
@@ -2098,32 +2098,6 @@ object ApiListener "api" {
     }
 
     #
-    # Check if the local host key is still valid
-    #
-    $installer | Add-Member -membertype ScriptMethod -name 'isHostAPIKeyValid' -value {
-
-        # If no API key is yet defined, we will require to fetch one
-        if (-Not $this.getProperty('director_host_token')) {
-            return $FALSE;
-        }
-
-        # Check against the powershell-parameter URL if our host API key is valid
-        # If we receive content -> everything is ok
-        # If we receive any 4xx code, propably the API Key is invalid and we require to fetch a new one
-        [string]$url = $this.config('director_url') + 'self-service/powershell-parameters?key=' + $this.getProperty('director_host_token');
-        [string]$response = $this.createHTTPRequest($url, '', 'POST', 'application/json', $TRUE, $FALSE);
-        if ($this.isHTTPResponseCode($response)) {
-            if ($response[0] -eq '4') {
-                $this.info('Target host is already present inside Icinga Director without API-Key. Re-Creating key...');
-                return $FALSE;
-            }
-        }
-
-        $this.info('Host API-Key validation successfull.');
-        return $TRUE;
-    }
-
-    #
     # This function will allow us to create a
     # host object directly inside the Icinga Director
     # with a provided JSON string
@@ -2131,40 +2105,49 @@ object ApiListener "api" {
     $installer | Add-Member -membertype ScriptMethod -name 'createHostInsideIcingaDirector' -value {
 
         if ($this.config('director_url') -And $this.getProperty('local_hostname')) {
-            if ($this.config('director_auth_token')) {
-                if ($this.requireIcingaDirectorAPIVersion('1.4.0', '[Function::createHostInsideIcingaDirector]')) {
+            if ($this.getProperty('use_self_service_api')) {
 
-                    # Check if our API Host-Key is present and valid
-                    if ($this.isHostAPIKeyValid()) {
-                        return;
-                    }
+                if ($this.getProperty('icinga_host_exist')) {
+                    $this.info('Host is already registered within Icinga Director.');
+                    return;
+                }
 
-                    # If not, try to create the host and fetch the API key
-                    [string]$apiKey = $this.config('director_auth_token');
-                    [string]$url = $this.config('director_url') + 'self-service/register-host?name=' + $this.getProperty('local_hostname') + '&key=' + $apiKey;
-                    [string]$json = '';
-                    # If no JSON Object is defined (should be default), we shall create one
-                    if (-Not $this.config('director_host_object')) {
-                        [string]$hostname = $this.getProperty('local_hostname');
-                        $json = '{ "address": "' + $hostname + '", "display_name": "' + $hostname + '" }';
+                if ($this.getProperty('no_valid_api_token')) {
+                    $this.info('Skipping host creation over Icinga Director Self-Service API, as no valid token has been specified.');
+                    return;
+                }
+
+                # If not, try to create the host and fetch the API key
+                [string]$apiKey = $this.config('director_auth_token');
+                [string]$url = $this.config('director_url') + 'self-service/register-host?name=' + $this.getProperty('local_hostname') + '&key=' + $apiKey;
+                [string]$json = '';
+                # If no JSON Object is defined (should be default), we shall create one
+                if (-Not $this.config('director_host_object')) {
+                    [string]$hostname = $this.getProperty('local_hostname');
+                    $json = '{ "address": "' + $hostname + '", "display_name": "' + $hostname + '" }';
+                } else {
+                    # Otherwise use the specified one and replace the host object placeholders
+                    $json = $this.doReplaceJSONPlaceholders($this.config('director_host_object'));
+                }
+
+                $this.info('Creating host ' + $this.getProperty('local_hostname') + ' over API token inside Icinga Director.');
+
+                [string]$httpResponse = $this.createHTTPRequest($url, $json, 'POST', 'application/json', $TRUE, $TRUE);
+
+                if ($this.isHTTPResponseCode($httpResponse) -eq $FALSE) {
+                    $this.setProperty('director_host_token', $httpResponse);
+                    $this.writeHostAPIKeyToDisk();
+                    [string]$response = $this.fetchIcingaDirectorSelfServiceAPIConfig($httpResponse, $FALSE);
+                    if ($response -ne '200') {
+                        $this.error([string]::Format('Failed to fetch config arguments of Icinga Director Self-Service API after adding new host to Icinga Director. Response was "{0}"', $httpResponse));
                     } else {
-                        # Otherwise use the specified one and replace the host object placeholders
-                        $json = $this.doReplaceJSONPlaceholders($this.config('director_host_object'));
+                        $this.info('Successfully fetched configuration for this host over Self-Service API.')
                     }
-
-                    $this.info('Creating host ' + $this.getProperty('local_hostname') + ' over API token inside Icinga Director.');
-
-                    [string]$httpResponse = $this.createHTTPRequest($url, $json, 'POST', 'application/json', $TRUE, $TRUE);
-
-                    if ($this.isHTTPResponseCode($httpResponse) -eq $FALSE) {
-                        $this.setProperty('director_host_token', $httpResponse);
-                        $this.writeHostAPIKeyToDisk();
+                } else {
+                    if ($httpResponse -eq '400') {
+                        throw [string]::Format("Received response 400 from Icinga Director. In general this means you tried to re-create an existing host inside the Icinga Director with a host template API key, but the host itself has already a key assigned. Please drop the API key for the host '{0}' and re-run this script to claim ownership. This error usually occures in case the host token was removed manually from the host.", $this.getProperty('local_hostname'));
                     } else {
-                        if ($httpResponse -eq '400') {
-                            $this.warn('Received response 400 from Icinga Director. Possibly you tried to re-create the host ' + $this.getProperty('local_hostname') + '. In case the host already exists, please remove the Host-Api-Key inside the Icinga Director and try again.');
-                        } else {
-                            $this.warn('Failed to create host. Response code ' + $httpResponse);
-                        }
+                        $this.warn('Failed to create host. Response code ' + $httpResponse);
                     }
                 }
             } elseif ($this.config('director_host_object'))  {
@@ -2328,67 +2311,139 @@ object ApiListener "api" {
     }
 
     #
-    # This function will fetch all arguments configured inside the Icinga Director
-    # to allow an entire auto configuration of the Icinga 2 Agent
+    # This function will connect to the Icinga Director Self-Service API
+    # and try to fetch the configuration for our host or the global
+    # configuraton, depending if the Host-Token does exist and is valid
+    # or in case it does not exist or is invalid if the API-tiken is
+    # specified
     #
-    $installer | Add-Member -membertype ScriptMethod -name 'fetchArgumentsFromIcingaDirector' -value {
-        param([bool]$globalConfig);
-
-        # By default we will use the Host-Api-Key stored on the disk (if written on)
-        [string]$key = $this.getProperty('director_host_token');
-
-        # In case we are not having the Host-Api-Key already, use the value from the argument
-        if ($globalConfig -eq $TRUE) {
-             $key = $this.config('director_auth_token');
-        }
-
-        # If no key is specified, we are not having set one and should leave this function
-        if ($key -eq '') {
+    $installer | Add-Member -membertype ScriptMethod -name 'connectToIcingaDirectorSelfServiceAPI' -value {
+        if (-Not $this.config('director_url')) {
             return;
         }
 
-        if ($this.requireIcingaDirectorAPIVersion('1.4.0', '[Function::fetchArgumentsFromIcingaDirector]')) {
-            [string]$url = $this.config('director_url') + 'self-service/powershell-parameters?key=' + $key;
-            [string]$argumentString = $this.createHTTPRequest($url, '', 'POST', 'application/json', $TRUE, $FALSE);
+        if ($this.config('director_user') -And $this.config('director_password')) {
+            $this.info('User and Password for Icinga Director have been specified, Self-Service API will not be used.');
+            $this.setProperty('use_password_auth', $TRUE);
+            return;
+        }
 
-            if ($this.isHTTPResponseCode($argumentString) -eq $FALSE) {
-                # First split the entire result based in new-lines into an array
-                [array]$arguments = $argumentString.Split("`n");
+        $this.setProperty('icinga_host_exist', $FALSE);
 
-                # Now loop all elements and construct a dictionary for all values
-                foreach ($item in $arguments) {
-                    if ($item.Contains(':')) {
-                        $this.debug([string]::Format('Processing Director API config argument "{0}"', $item));
-                        [int]$argumentPos = $item.IndexOf(":");
-                        [string]$argument = $item.Substring(0, $argumentPos);
-                        if (($argumentPos + 2) -le $item.Length) {
-                            [string]$value = $item.Substring($argumentPos + 2, $item.Length - 2 - $argumentPos);
-                            $value = $value.Replace("`r", '');
-                            $value = $value.Replace("`n", '');
+        [string]$response = $this.fetchIcingaDirectorSelfServiceAPIConfig($this.getProperty('director_host_token'), $FALSE);
+        switch ($response) {
+            '200' {
+                $this.info('Connected successfully to Icinga Director Self-Service API over stored host token.');
+                $this.setProperty('icinga_host_exist', $TRUE);
+                $this.setProperty('use_self_service_api', $TRUE);
+                return;
+            };
+            '404' {
+                $this.warn('The local host token could not be found inside the Icinga Director.');
+            };
+            '500' {
+                $this.warn('An internal server error occured while processing your local host token against the Icinga Director Self-Service API.');
+            };
+        }
 
-                            if ($value.Contains( '!')) {
-                                [array]$valueArray = $value.Split('!');
-                                $this.overrideConfig($argument, $valueArray);
-                            } else {
-                                if ($value.toLower() -eq 'true') {
-                                    $this.overrideConfig($argument, $TRUE);
-                                } elseif ($value.toLower() -eq 'false') {
-                                    $this.overrideConfig($argument, $FALSE);
-                                } else {
-                                    $this.overrideConfig($argument, $value);
-                                }
-                            }
+        if ($this.config('director_auth_token') -eq '' -And $this.getProperty('director_host_token')) {
+            $this.error('No template API token has been specified and the host token seems no longer valid.')
+            $this.setProperty('no_valid_api_token', $TRUE);
+            return;
+        }
+
+        # In case no host-token is set or no longer valid, use our API token if
+        # specified to fetch the global configuration from the API
+        $response = $this.fetchIcingaDirectorSelfServiceAPIConfig($this.config('director_auth_token'), $FALSE);
+        switch ($response) {
+            '200' {
+                $this.info('Connected successfully to Icinga Director Self-Service API over API token.');
+                $this.setProperty('use_self_service_api', $TRUE);
+                return;
+            };
+            '404' {
+                $this.warn('Failed to query Icinga Director Self-Service API.');
+            };
+            '500' {
+                $this.warn('An internal server error occured while processing your API token against the Icinga Director Self-Service API.');
+            };
+            '900' {
+                # Nothing to do
+                return;
+            };
+        }
+
+        if ($this.getProperty('director_host_token') -Or $this.config('director_auth_token')) {
+            $this.error(
+                [string]::Format('Failed to connect to Icinga Director Self-Service API. Tokens were specified but informations could not be fetched. Please review your tokens: Host: "{0}", API: "{1}".',
+                                    $this.getProperty('director_host_token'),
+                                    $this.config('director_auth_token')
+                                    ));
+            $this.setProperty('no_valid_api_token', $TRUE);
+        }
+    }
+
+    #
+    # This function will try to call the Icinga Director API
+    # with either a host-token or our API-token and retreive
+    # our arguments for processing with the configuration of
+    # our Icinga 2 Agent Setup
+    #
+    $installer | Add-Member -membertype ScriptMethod -name 'fetchIcingaDirectorSelfServiceAPIConfig' -value {
+        param([string]$token, [bool]$writeError);
+        if (-Not $this.config('director_url') -Or $token -eq '') {
+            return '900';
+        }
+
+        if (-Not $this.requireIcingaDirectorAPIVersion('1.4.0', '[Function::fetchIcingaDirectorSelfServiceAPIConfig]')) {
+            return '900';
+        }
+
+        [string]$url = $this.config('director_url') + 'self-service/powershell-parameters?key=' + $token;
+        [string]$argumentString = $this.createHTTPRequest($url, '', 'POST', 'application/json', $TRUE, $FALSE);
+
+        if ($this.isHTTPResponseCode($argumentString) -eq $FALSE) {
+            # First split the entire result based in new-lines into an array
+            [array]$arguments = $argumentString.Split("`n");
+
+            # Now loop all elements and construct a dictionary for all values
+            foreach ($item in $arguments) {
+                if ($item.Contains(':')) {
+                    $this.debug([string]::Format('Processing Director API config argument "{0}"', $item));
+                    [int]$argumentPos = $item.IndexOf(":");
+                    [string]$argument = $item.Substring(0, $argumentPos);
+                    if (($argumentPos + 2) -le $item.Length) {
+                        [string]$value = $item.Substring($argumentPos + 2, $item.Length - 2 - $argumentPos);
+                        $value = $value.Replace("`r", '');
+                        $value = $value.Replace("`n", '');
+
+                        if ($value.Contains( '!')) {
+                            [array]$valueArray = $value.Split('!');
+                            $this.overrideConfig($argument, $valueArray);
                         } else {
-                            $this.debug([string]::Format('Got key argument "{0}" without a value.', $argument));
+                            if ($value.toLower() -eq 'true') {
+                                $this.overrideConfig($argument, $TRUE);
+                            } elseif ($value.toLower() -eq 'false') {
+                                $this.overrideConfig($argument, $FALSE);
+                            } else {
+                                $this.overrideConfig($argument, $value);
+                            }
                         }
+                    } else {
+                        $this.debug([string]::Format('Got key argument "{0}" without a value.', $argument));
                     }
                 }
-            } else {
+            }
+        } else {
+            if ($writeError) {
                 $this.error('Received ' + $argumentString + ' from Icinga Director. Possibly your API token is no longer valid or the object does not exist.');
             }
-            # Ensure we generate the required configuration content
-            $this.generateConfigContent();
+            return $argumentString;
         }
+
+        # Ensure we generate the required configuration content
+        $this.generateConfigContent();
+        return '200';
     }
 
     #
@@ -2398,7 +2453,11 @@ object ApiListener "api" {
     #
     $installer | Add-Member -membertype ScriptMethod -name 'fetchTicketFromIcingaDirector' -value {
 
-        if ($this.getProperty('director_host_token')) {
+        if ($this.getProperty('director_host_token') -And -Not $this.getProperty('use_password_auth')) {
+            if ($this.getProperty('no_valid_api_token')) {
+                $this.info('Skipping fetching of SSL ticket, as no valid API token has been specified.');
+                return;
+            }
             if ($this.requireIcingaDirectorAPIVersion('1.4.0', '[Function::fetchTicketFromIcingaDirector]')) {
                 [string]$url = $this.config('director_url') + 'self-service/ticket?key=' + $this.getProperty('director_host_token');
                 [string]$httpResponse = $this.createHTTPRequest($url, '', 'POST', 'application/json', $TRUE, $TRUE);
@@ -2428,7 +2487,11 @@ object ApiListener "api" {
                         $this.setProperty('icinga_ticket', $httpResponse);
                     }
                 } else {
-                    $this.error('Failed to fetch Ticket from Icinga Director. Error response ' + $httpResponse);
+                    if ($httpResponse -eq '404') {
+                        $this.error('Unable to fetch host ticket from Icinga Director. The Host object could not be found. Ensure the object is already present or created by specifying the -DirectorHostObject argument of this script.');
+                    } else {
+                        $this.error('Failed to fetch Ticket from Icinga Director. Error response ' + $httpResponse);
+                    }
                 }
             }
         }
@@ -2651,11 +2714,11 @@ object ApiListener "api" {
             $this.getIcingaDirectorVersion();
             # Convert our DirectorHostObject argument from Object to String if required
             $this.convertDirectorHostObjectArgument();
-            # Read arguments for auto config from the Icinga Director
-            # At first only with our public key for global config attributes
-            $this.fetchArgumentsFromIcingaDirector($TRUE);
             # Read the Host-API Key in case it exists
             $this.readHostAPIKeyFromDisk();
+            # Establish connection to Icinga Director Self-Service API if required
+            # and fetch basic / host configuration if tokens are set
+            $this.connectToIcingaDirectorSelfServiceAPI();
             # Get host name or FQDN if required
             $this.fetchHostnameOrFQDN();
             # Get IP-Address of host
@@ -2666,9 +2729,6 @@ object ApiListener "api" {
             $this.doTransformHostname();
             # Try to create a host object inside the Icinga Director
             $this.createHostInsideIcingaDirector();
-            # Load the configuration again, but this time with our
-            # Host key to fetch additional informations like endpoints
-            $this.fetchArgumentsFromIcingaDirector($FALSE);
             # First check if we should get some parameters from the Icinga Director
             $this.fetchTicketFromIcingaDirector();
 
@@ -2688,8 +2748,6 @@ object ApiListener "api" {
                 if ($this.canInstallAgent()) {
                     $this.installAgent();
                     $this.cleanupAgentInstaller();
-                    # In case we have an API key assigned, write it to disk
-                    $this.writeHostAPIKeyToDisk();
                 } else {
                     $this.warn('Icinga 2 Agent is not installed and not allowed of beeing installed.');
                 }
