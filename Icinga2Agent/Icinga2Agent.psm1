@@ -57,6 +57,10 @@ function Icinga2AgentModule {
         [bool]$FullUninstallation         = $FALSE,
         [bool]$RemoveNSClient             = $FALSE,
 
+        # Dump Config arguments
+        [switch]$DumpIcingaConfig         = $FALSE,
+        [switch]$DumpIcingaObjects        = $FALSE,
+
         #Internal handling
         [switch]$RunInstaller             = $FALSE,
         [switch]$RunUninstaller           = $FALSE,
@@ -345,6 +349,15 @@ function Icinga2AgentModule {
         param([string] $message, [array] $args);
         Write-Host 'Notice:' $message -ForegroundColor green;
         $this.writeLogFile('info', $message);
+    }
+
+    #
+    # Return a output message with wrhite text
+    #
+    $installer | Add-Member -membertype ScriptMethod -name 'output' -value {
+        param([string] $message, [array] $args);
+        Write-Host '' $message -ForegroundColor white;
+        $this.writeLogFile('', $message);
     }
 
     #
@@ -2865,9 +2878,56 @@ object ApiListener "api" {
         return $this.getScriptExitCode();
     }
 
+    #
+    # Locate the current installation of Icinga 2 and dump the icinga2.conf to the window
+    #
+    $installer | Add-Member -membertype ScriptMethod -name 'dumpIcinga2Conf' -value {
+        if (-Not $this.isAgentInstalled()) {
+            $this.info('Icinga 2 Agent is not installed on the system. No configuration to dump.');
+            return $this.getScriptExitCode();
+        }
+
+        [string]$icingaConfig = '';
+        if (Test-Path $this.getIcingaConfigFile()) {
+            $icingaConfig = [System.IO.File]::ReadAllText($this.getIcingaConfigFile());
+            $this.info([string]::Format('Dumping content of the Icinga 2 configuration from "{0}".', $this.getIcingaConfigFile()));
+            $this.output($icingaConfig);
+
+        } else {
+            $this.exception([string]::Format('Failed to lookup Icinga 2 configuration at "{0}". File does not exist.', $this.getIcingaConfigFile()));
+        }
+    }
+
+    #
+    # Locate the current installation of Icinga 2 and dump all Icinga 2 objects
+    #
+    $installer | Add-Member -membertype ScriptMethod -name 'dumpIcinga2Objects' -value {
+        if (-Not $this.isAgentInstalled()) {
+            $this.info('Icinga 2 Agent is not installed on the system. No objects to dump.');
+            return $this.getScriptExitCode();
+        }
+
+        [string]$icingaBinary = Join-Path -Path $this.getInstallPath() -ChildPath 'sbin\icinga2.exe';
+
+        if (-Not (Test-Path $icingaBinary)) {
+            $this.exception([string]::Format('Failed to query Icinga 2 objects. Executable at "{0}" does not exist.', $icingaBinary));
+            return $this.getScriptExitCode();
+        }
+
+        $result = $this.startProcess($icingaBinary, $FALSE, 'object list');
+        if ($result.Get_Item('exitcode') -ne 0) {
+            $this.exception($result.Get_Item('message'));
+        } else {
+            $this.info('Dumping all objects from Icinga 2');
+            $this.output($result.Get_Item('message'));
+        }
+    }
+
     # Make the installation / uninstallation of the script easier and shorter
     [int]$installerExitCode = 0;
     [int]$uninstallerExitCode = 0;
+    [int]$dumpConfigExitCode = 0;
+    [int]$dumpObjectsExitCode = 0;
     # If flag RunUninstaller is set, do the uninstallation of the components
     if ($RunUninstaller) {
         $uninstallerExitCode = $installer.uninstall();
@@ -2876,8 +2936,15 @@ object ApiListener "api" {
     if ($RunInstaller) {
         $installerExitCode = $installer.install();
     }
-    if ($RunInstaller -Or $RunUninstaller) {
-        if ($installerExitCode -ne 0 -Or $uninstallerExitCode -ne 0) {
+    # If flag DumpIcingaConfig is set, print the current Icinga 2 configuration
+    if ($DumpIcingaConfig) {
+        $dumpConfigExitCode = $installer.dumpIcinga2Conf();
+    }
+    if ($DumpIcingaObjects) {
+        $dumpObjectsExitCode = $installer.dumpIcinga2Objects();
+    }
+    if ($RunInstaller -Or $RunUninstaller -Or $DumpIcingaConfig -Or $DumpIcingaObjects) {
+        if ($installerExitCode -ne 0 -Or $uninstallerExitCode -ne 0 -Or $dumpConfigExitCode -ne 0 -Or $dumpObjectsExitCode -ne 0) {
             return 1;
         }
     }
