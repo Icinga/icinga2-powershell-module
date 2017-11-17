@@ -28,3 +28,24 @@ You might require to scroll a bit to locate your module directory with the insta
 Once it's there, the installation was successfull
 
 If you are done, you might want to take a look on the [example page](30-Examples.md).
+
+## Important note for PowerShell version 2 environments
+
+In order to get the module working, it is **not** enough to copy it into a module directory as described above for PowerShell version 2. Before you can use it, you will require to **import** the module with the following command for each PowerShell session:
+
+```powershell
+    Import-Module Icinga2Agent
+```
+
+If you design your own script or execute the commands over PowerShell remote execution, the import command is always required as first command.
+
+A working example looks like this:
+```powershell
+    Import-Module Icinga2Agent;
+    exit $icinga = Icinga2AgentModule `
+                   -DirectorUrl       'https://icinga2-master.example.com/icingaweb2/director/' `
+                   -DirectorAuthToken '34086b3480965b083476c08346c34980' `
+                   -RunInstaller;
+```
+
+This is only required for PowerShell Version 2. Version 3 and above will import the module automaticly once a PowerShell console is beeing opened.
