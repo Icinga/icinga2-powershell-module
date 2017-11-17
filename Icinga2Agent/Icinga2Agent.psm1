@@ -2753,10 +2753,6 @@ object ApiListener "api" {
             $this.lookupPrimaryIPv4Address();
             # Transform the hostname if required
             $this.doTransformHostname();
-            # Try to create a host object inside the Icinga Director
-            $this.createHostInsideIcingaDirector();
-            # First check if we should get some parameters from the Icinga Director
-            $this.fetchTicketFromIcingaDirector();
             # Before we continue, flush the API Directory if specified. This will require
             # us to stop the Icinga 2 Agent, but should prevent any false positive in
             # case dependencies within the API Director are no longer pressent and will
@@ -2783,6 +2779,11 @@ object ApiListener "api" {
                     $this.warn('Icinga 2 Agent is not installed and not allowed of beeing installed.');
                 }
             }
+
+            # Try to create a host object inside the Icinga Director
+            $this.createHostInsideIcingaDirector();
+            # First check if we should get some parameters from the Icinga Director
+            $this.fetchTicketFromIcingaDirector();
 
             if (-Not $this.hasCertificates() -Or $this.forceCertificateGeneration()) {
                 $this.generateCertificates();
