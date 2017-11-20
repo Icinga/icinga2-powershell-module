@@ -21,7 +21,6 @@ function Icinga2AgentModule {
         [array]$ParentEndpoints,
         [array]$EndpointsConfig,
         [array]$GlobalZones               = @( 'director-global' ),
-        [switch]$Ticketless               = $FALSE,
 
         # Agent installation / update
         [string]$IcingaServiceUser,
@@ -33,9 +32,11 @@ function Icinga2AgentModule {
 
         # Agent signing
         [string]$CAServer,
+        [string]$CACertificatePath,
         [int]$CAPort                      = 5665,
         [bool]$ForceCertificateGeneration = $FALSE,
         [string]$CAFingerprint,
+        [switch]$CAProxy                  = $FALSE,
 
         # Director communication
         [string]$DirectorUrl,
@@ -91,7 +92,6 @@ function Icinga2AgentModule {
         parent_endpoints        = $ParentEndpoints;
         endpoints_config        = $EndpointsConfig;
         global_zones            = $GlobalZones;
-        ticketless              = $Ticketless;
         icinga_service_user     = $IcingaServiceUser;
         download_url            = $DownloadUrl;
         agent_install_directory = $AgentInstallDirectory;
@@ -99,9 +99,11 @@ function Icinga2AgentModule {
         installer_hashes        = $InstallerHashes;
         flush_api_directory     = $FlushApiDirectory;
         ca_server               = $CAServer;
+        ca_certificate_path     = $CACertificatePath;
         ca_port                 = $CAPort;
         force_cert              = $ForceCertificateGeneration;
         ca_fingerprint          = $CAFingerprint;
+        caproxy                 = $CAProxy;
         director_url            = $DirectorUrl;
         director_user           = $DirectorUser;
         director_password       = $DirectorPassword;
@@ -1639,17 +1641,34 @@ object ApiListener "api" {' + $certificateConfig + '
         }
 
         # Handling for Icinga 2.8.0 and above: CA-Proxy support
-        if ($this.config('ticketless')) {
+        if ($this.config('caproxy')) {
             if (-Not $this.validateVersions('2.8.0', $this.getProperty('icinga2_agent_version'))) {
-                throw 'The argument "-Ticketless" is only supported by Icinga Version 2.8.0 and above.';
+                throw 'The argument "-CAProxy" is only supported by Icinga Version 2.8.0 and above.';
                 return;
             }
 
+            if (-Not $this.config('ca_certificate_path')) {
+                throw 'You will require to specify a source path of your CA certificate with -CACertificatePath in order to use CA proxy certificate generation.';
+            }
+
             # Generate the certificate
+            [string]$caDestPath = (Join-Path $icingaCertDir -ChildPath '\ca.crt');
             $this.createHostCertificates($agentName, $icingaCertDir);
             $this.fixCertificateNames($agentName, $icingaCertDir);
             $this.setProperty('require_restart', 'true');
             $this.info('Your host certificate has been generated. Please review the request on your Icinga CA with "icinga2 ca list" and sign it with "icinga2 ca sign <request_id>".');
+            $this.info([string]::Format('Trying to copy your specified CA certificate "{0}" to "{1}".',
+                                        $this.config('ca_certificate_path'),
+                                        $caDestPath
+                                        ));
+            if (-Not (Test-Path $this.config('ca_certificate_path'))) {
+                throw [string]::Format('Failed to copy your CA certificate from "{0}" to "{1}". Your source destination does not exist.',
+                                                $this.config('ca_certificate_path'),
+                                                $caDestPath
+                                                );
+                return;
+            }
+            Copy-Item $this.config('ca_certificate_path') $caDestPath;
             return;
         }
 
