@@ -21,6 +21,7 @@ function Icinga2AgentModule {
         [array]$ParentEndpoints,
         [array]$EndpointsConfig,
         [array]$GlobalZones               = @( 'director-global' ),
+        [switch]$Ticketless               = $FALSE,
 
         # Agent installation / update
         [string]$IcingaServiceUser,
@@ -90,6 +91,7 @@ function Icinga2AgentModule {
         parent_endpoints        = $ParentEndpoints;
         endpoints_config        = $EndpointsConfig;
         global_zones            = $GlobalZones;
+        ticketless              = $Ticketless;
         icinga_service_user     = $IcingaServiceUser;
         download_url            = $DownloadUrl;
         agent_install_directory = $AgentInstallDirectory;
@@ -381,6 +383,7 @@ function Icinga2AgentModule {
         # Set the default config dir
         $this.setProperty('config_dir', (Join-Path -Path $Env:ProgramData -ChildPath 'icinga2\etc\icinga2\'));
         $this.setProperty('api_dir', (Join-Path -Path $Env:ProgramData -ChildPath 'icinga2\var\lib\icinga2\api'));
+        $this.setProperty('cert_dir', (Join-Path -Path $Env:ProgramData -ChildPath 'icinga2\var\lib\icinga2\certs'));
         $this.setProperty('icinga_ticket', $this.config('ticket'));
         $this.setProperty('local_hostname', $this.config('agent_name'));
         # Ensure we generate the required configuration content
@@ -903,6 +906,9 @@ function Icinga2AgentModule {
             $this.info('Icinga 2 Agent successfully updated.');
         }
 
+        # Update the Icinga 2 Agent Directories in case of a version change
+        # Required by updating from older versions to 2.8.0. and newer
+        $return = $this.isAgentInstalled();
         $this.setProperty('require_restart', 'true');
     }
 
@@ -998,6 +1004,19 @@ function Icinga2AgentModule {
         $this.setProperty('agent_version', $localData.DisplayVersion);
         $this.setProperty('install_msi_package', 'Icinga2-v' + $this.config('agent_version') + '-' + $architecture + '.msi');
         $this.setProperty('system_architecture', $architecture);
+        $this.setIcinga2AgentVersion($localData.DisplayVersion);
+
+        if (-Not $this.validateVersions('2.8.0', $this.getProperty('icinga2_agent_version'))) {
+            $this.setProperty('cert_dir', (Join-Path -Path $this.getProperty('config_dir') -ChildPath 'pki'));
+        } else {
+            $this.setProperty('cert_dir', (Join-Path -Path $Env:ProgramData -ChildPath 'icinga2\var\lib\icinga2\certs'));
+        }
+
+        $this.info([string]::Format('Using Icinga version "{0}", setting certificate directory to "{1}"',
+                                    $localData.DisplayVersion,
+                                    $this.getProperty('cert_dir')
+                                    )
+                    );
 
         if ($localData.InstallLocation) {
             $this.info([string]::Format('Found Icinga 2 Agent version {0} installed at "{1}"', $localData.DisplayVersion, $localData.InstallLocation));
@@ -1377,6 +1396,15 @@ function Icinga2AgentModule {
                 $icingaCurrentConfig = [System.IO.File]::ReadAllText($this.getIcingaConfigFile());
             }
 
+            [string]$certificateConfig = '';
+            # Icinga 2 Agent Versions below 2.8.0 will require cert_path, key_path and ca_path
+            if (-Not $this.validateVersions('2.8.0', $this.getProperty('icinga2_agent_version'))) {
+                $certificateConfig = '
+  cert_path = SysconfDir + "/icinga2/pki/' + $this.getProperty('local_hostname') + '.crt"
+  key_path = SysconfDir + "/icinga2/pki/' + $this.getProperty('local_hostname') + '.key"
+  ca_path = SysconfDir + "/icinga2/pki/ca.crt"';
+            }
+
             [string]$icingaNewConfig =
 '/**
  * Icinga 2 Config - Proposed by Icinga 2 PowerShell Module
@@ -1388,6 +1416,9 @@ include <itl>
 include <plugins>
 include <nscp>
 include <windows-plugins>
+
+/* Required for Icinga 2.8.0 and above */
+const NodeName = "' + $this.getProperty('local_hostname') + '"
 
 /* Define our block required to enable or disable Icinga 2 debug log
  * Enable or disable it by using the PowerShell Module with
@@ -1449,10 +1480,7 @@ object Zone "' + $this.getProperty('local_hostname') + '" {
  * can be changed with argument -AcceptConfig and the bind informations.
  * The bind_port can be modified with argument -AgentListenPort.
  */
-object ApiListener "api" {
-  cert_path = SysconfDir + "/icinga2/pki/' + $this.getProperty('local_hostname') + '.crt"
-  key_path = SysconfDir + "/icinga2/pki/' + $this.getProperty('local_hostname') + '.key"
-  ca_path = SysconfDir + "/icinga2/pki/ca.crt"
+object ApiListener "api" {' + $certificateConfig + '
   accept_commands = true
   accept_config = ' + $this.convertBoolToString($this.config('accept_config')) + '
   bind_host = "::"
@@ -1561,39 +1589,78 @@ object ApiListener "api" {
     }
 
     #
+    # Create Host-Certificates for Icinga 2
+    #
+    $installer | Add-Member -membertype ScriptMethod -name 'createHostCertificates' -value {
+        param([string]$hostname, [string]$certDir);
+
+        $this.info('Generating Host certificates required by Icinga 2');
+        $result = $this.startProcess($icingaBinary, $FALSE, [string]::Format('pki new-cert --cn {0} --key {1}{0}.key --cert {1}{0}.crt',
+                                                                            $hostname,
+                                                                            $certDir
+                                                                            )
+        );
+
+        if ($result.Get_Item('exitcode') -ne 0) {
+            throw $result.Get_Item('message');
+        }
+        $this.info($result.Get_Item('message'));
+    }
+
+    #
+    # Fix certificate naming for upper / lower case changes
+    #
+    $installer | Add-Member -membertype ScriptMethod -name 'fixCertificateNames' -value {
+        param([string]$hostname, [string]$certDir);
+        # Rename the certificates to apply possible upper / lower case naming changes
+        # which is not done by Windows by default
+        Move-Item (Join-Path -Path $certDir -ChildPath ($hostname + '.key')) (Join-Path -Path $certDir -ChildPath ($hostname + '.key'))
+        Move-Item (Join-Path -Path $certDir -ChildPath ($hostname + '.crt')) (Join-Path -Path $certDir -ChildPath ($hostname + '.crt'))
+    }
+
+    #
     # Generate the Icinga 2 SSL certificate to ensure the communication between the
     # Agent and the Master can be established in first place
     #
     $installer | Add-Member -membertype ScriptMethod -name 'generateCertificates' -value {
 
-        if ($this.getProperty('local_hostname') -And $this.config('ca_server') -And $this.getProperty('icinga_ticket')) {
-            [string]$icingaPkiDir = Join-Path -Path $this.getProperty('config_dir') -ChildPath 'pki\';
-            [string]$icingaBinary = Join-Path -Path $this.getInstallPath() -ChildPath 'sbin\icinga2.exe';
-            [string]$agentName = $this.getProperty('local_hostname');
+        [string]$icingaCertDir = Join-Path $this.getProperty('cert_dir') -ChildPath '\';
+        [string]$icingaBinary = Join-Path -Path $this.getInstallPath() -ChildPath 'sbin\icinga2.exe';
+        [string]$agentName = $this.getProperty('local_hostname');
 
-            if (-Not (Test-Path $icingaBinary)) {
-                $this.warn('Unable to generate Icinga 2 certificates. Icinga 2 executable not found. It looks like the Icinga 2 Agent is not installed.');
+        if (-Not (Test-Path $icingaBinary)) {
+            $this.warn('Unable to generate Icinga 2 certificates. Icinga 2 executable not found. It looks like the Icinga 2 Agent is not installed.');
+            return;
+        }
+
+        if (-Not $this.getProperty('local_hostname')) {
+            $this.info('Skipping function for generating certificates, as hostname is not specified within the module.');
+            return;
+        }
+
+        # Handling for Icinga 2.8.0 and above: CA-Proxy support
+        if ($this.config('ticketless')) {
+            if (-Not $this.validateVersions('2.8.0', $this.getProperty('icinga2_agent_version'))) {
+                throw 'The argument "-Ticketless" is only supported by Icinga Version 2.8.0 and above.';
                 return;
             }
 
             # Generate the certificate
-            $this.info('Generating Icinga 2 certificates');
+            $this.createHostCertificates($agentName, $icingaCertDir);
+            $this.fixCertificateNames($agentName, $icingaCertDir);
+            $this.setProperty('require_restart', 'true');
+            $this.info('Your host certificate has been generated. Please review the request on your Icinga CA with "icinga2 ca list" and sign it with "icinga2 ca sign <request_id>".');
+            return;
+        }
 
-            $result = $this.startProcess($icingaBinary, $FALSE, [string]::Format('pki new-cert --cn {0} --key {1}{2}.key --cert {1}{2}.crt',
-                                                                                $this.getProperty('local_hostname'),
-                                                                                $icingaPkiDir,
-                                                                                $agentName
-                                                                                )
-                                        );
-            if ($result.Get_Item('exitcode') -ne 0) {
-                throw $result.Get_Item('message');
-            }
-            $this.info($result.Get_Item('message'));
+        if ($this.config('ca_server') -And $this.getProperty('icinga_ticket')) {
+            # Generate the certificate
+            $this.createHostCertificates($agentName, $icingaCertDir);
 
             # Save Certificate
             $this.info("Storing Icinga 2 certificates");
             $result = $this.startProcess($icingaBinary, $FALSE, [string]::Format('pki save-cert --key {0}{1}.key --trustedcert {0}trusted-master.crt --host {2}',
-                                                                                $icingaPkiDir,
+                                                                                $icingaCertDir,
                                                                                 $agentName,
                                                                                 $this.config('ca_server')
                                                                                 )
@@ -1604,7 +1671,7 @@ object ApiListener "api" {
             $this.info($result.Get_Item('message'));
 
             # Validate if set against a given fingerprint for the CA
-            if (-Not $this.validateCertificate([string]::Format('{0}trusted-master.crt', $icingaPkiDir))) {
+            if (-Not $this.validateCertificate([string]::Format('{0}trusted-master.crt', $icingaCertDir))) {
                 throw 'Failed to validate against CA authority';
             }
 
@@ -1614,7 +1681,7 @@ object ApiListener "api" {
                                                                                 $this.config('ca_server'),
                                                                                 $this.config('ca_port'),
                                                                                 $this.getProperty('icinga_ticket'),
-                                                                                $icingaPkiDir,
+                                                                                $icingaCertDir,
                                                                                 $agentName
                                                                                 )
                                         );
@@ -1625,15 +1692,10 @@ object ApiListener "api" {
                 throw $result.Get_Item('message');
             }
             $this.info($result.Get_Item('message'));
-
-            # Rename the certificates to apply possible upper / lower case naming chanes
-            # which is not done by Windows by default
-            Move-Item (Join-Path -Path $icingaPkiDir -ChildPath ($agentName + '.key')) (Join-Path -Path $icingaPkiDir -ChildPath ($agentName + '.key'))
-            Move-Item (Join-Path -Path $icingaPkiDir -ChildPath ($agentName + '.crt')) (Join-Path -Path $icingaPkiDir -ChildPath ($agentName + '.crt'))
-
+            $this.fixCertificateNames($agentName, $icingaCertDir);
             $this.setProperty('require_restart', 'true');
         } else  {
-            $this.info('Skipping certificate generation. One or more of the following arguments is not set: -AgentName <name> -CAServer <server> -Ticket <ticket>');
+            $this.info('Skipping certificate generation. One or more of the following arguments is not set: -CAServer <server> -Ticket <ticket>');
         }
     }
 
@@ -1671,14 +1733,14 @@ object ApiListener "api" {
     # Agent. If not, return FALSE
     #
     $installer | Add-Member -membertype ScriptMethod -name 'hasCertificates' -value {
-        [string]$icingaPkiDir = Join-Path -Path $this.getProperty('config_dir') -ChildPath 'pki';
+        [string]$icingaCertDir = Join-Path -Path $this.getProperty('cert_dir') -ChildPath '\';
         [string]$agentName = $this.getProperty('local_hostname');
         [bool]$filesExist = $FALSE;
         # First check if the files in generell exist
         if (
-            ((Test-Path ((Join-Path -Path $icingaPkiDir -ChildPath $agentName) + '.key'))) `
-            -And (Test-Path ((Join-Path -Path $icingaPkiDir -ChildPath $agentName) + '.crt')) `
-            -And (Test-Path (Join-Path -Path $icingaPkiDir -ChildPath 'ca.crt'))
+            ((Test-Path ((Join-Path -Path $icingaCertDir -ChildPath $agentName) + '.key'))) `
+            -And (Test-Path ((Join-Path -Path $icingaCertDir -ChildPath $agentName) + '.crt')) `
+            -And (Test-Path (Join-Path -Path $icingaCertDir -ChildPath 'ca.crt'))
         ) {
             $filesExist = $TRUE;
         }
@@ -1689,8 +1751,8 @@ object ApiListener "api" {
             [string]$hostCRT = [string]::Format('{0}.crt', $agentName);
             [string]$hostKEY = [string]::Format('{0}.key', $agentName);
 
-            # Get all files inside your PKIU directory
-            $certificates = Get-ChildItem -Path $icingaPkiDir;
+            # Get all files inside your certificate directory
+            $certificates = Get-ChildItem -Path $icingaCertDir;
             # Now loop each file and match their name with our hostname
             foreach ($cert in $certificates) {
                 if ($cert.Name.toLower() -eq $hostCRT.toLower() -Or $cert.Name.toLower() -eq $hostKEY.toLower()) {
@@ -2323,6 +2385,47 @@ object ApiListener "api" {
     }
 
     #
+    # Set Icinga 2 Agent Version based no the installed Agent
+    #
+    $installer | Add-Member -membertype ScriptMethod -name 'setIcinga2AgentVersion' -value {
+        param([string]$versionString)
+
+        if (-Not $versionString) {
+            return;
+        }
+
+        $this.setProperty('icinga2_agent_version', $versionString.Split('.'));
+    }
+
+    #
+    # Compare Version-Strings and check if we are running a higher or lower version
+    #
+    $installer | Add-Member -membertype ScriptMethod -name 'validateVersions' -value {
+        param([string]$requiredVersion, [array]$providedVersion);
+
+        if (-Not $requiredVersion -Or -Not $providedVersion) {
+            return $FALSE;
+        }
+
+        [array]$requiredVersion = $requiredVersion.Split('.');
+        $currentVersion = $providedVersion;
+
+        if ($requiredVersion[0] -gt $currentVersion[0]) {
+            return $FALSE;
+        }
+
+        if ($requiredVersion[1] -gt $currentVersion[1]) {
+            return $FALSE;
+        }
+
+        if ($requiredVersion[1] -ge $currentVersion[1] -And $requiredVersion[2] -gt $currentVersion[2]) {
+            return $FALSE;
+        }
+
+        return $TRUE;
+    }
+
+    #
     # Match the Icinga Director API Version against a provided string
     #
     $installer | Add-Member -membertype ScriptMethod -name 'requireIcingaDirectorAPIVersion' -value {
@@ -2342,29 +2445,13 @@ object ApiListener "api" {
             return $FALSE;
         }
 
-        [bool]$versionValid = $TRUE;
-        [array]$requiredVersion = $version.Split('.');
-        $currentVersion = $this.getProperty('icinga_director_api_version');
-
-        if ($requiredVersion[0] -gt $currentVersion[0]) {
-            $versionValid = $FALSE;
-        }
-
-        if ($requiredVersion[1] -gt $currentVersion[2]) {
-            $versionValid = $FALSE;
-        }
-
-        if ($requiredVersion[1] -ge $currentVersion[2] -And $requiredVersion[2] -gt $currentVersion[4]) {
-            $versionValid = $FALSE;
-        }
+        [bool]$versionValid = $this.validateVersions($version, $this.getProperty('icinga_director_api_version').Split('.'));
 
         if ($versionValid -eq $FALSE) {
-            $this.error([string]::Format('The feature "{0}" requires Icinga Director API-Version {1}. Got version {2}.{3}.{4}',
+            $this.error([string]::Format('The feature "{0}" requires Icinga Director API-Version {1}. Got version {2}',
                                         $functionName,
                                         $version,
-                                        $currentVersion[0],
-                                        $currentVersion[2],
-                                        $currentVersion[4]
+                                        $this.getProperty('icinga_director_api_version')
                                         )
                         );
             return $FALSE;
