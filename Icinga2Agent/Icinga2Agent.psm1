@@ -8,35 +8,35 @@ function Icinga2AgentModule {
         [string]$AgentName,
         [string]$Ticket,
         [string]$InstallAgentVersion,
-        [bool]$FetchAgentName             = $FALSE,
-        [bool]$FetchAgentFQDN             = $FALSE,
-        [int]$TransformHostname           = 0,
+        [switch]$FetchAgentName             = $FALSE,
+        [switch]$FetchAgentFQDN             = $FALSE,
+        [int]$TransformHostname             = 0,
 
         # Agent configuration
-        [int]$AgentListenPort             = 5665,
+        [int]$AgentListenPort               = 5665,
         [string]$ParentZone,
-        [bool]$AcceptConfig               = $TRUE,
-        [bool]$IcingaEnableDebugLog       = $FALSE,
-        [bool]$AgentAddFirewallRule       = $FALSE,
+        [bool]$AcceptConfig                 = $TRUE,
+        [switch]$IcingaEnableDebugLog       = $FALSE,
+        [switch]$AgentAddFirewallRule       = $FALSE,
         [array]$ParentEndpoints,
         [array]$EndpointsConfig,
-        [array]$GlobalZones               = @( 'director-global' ),
+        [array]$GlobalZones                 = @( 'director-global' ),
 
         # Agent installation / update
         [string]$IcingaServiceUser,
-        [string]$DownloadUrl              = 'https://packages.icinga.com/windows/',
+        [string]$DownloadUrl                = 'https://packages.icinga.com/windows/',
         [string]$AgentInstallDirectory,
-        [bool]$AllowUpdates               = $FALSE,
+        [switch]$AllowUpdates               = $FALSE,
         [array]$InstallerHashes,
-        [bool]$FlushApiDirectory          = $FALSE,
+        [switch]$FlushApiDirectory          = $FALSE,
 
         # Agent signing
         [string]$CAServer,
         [string]$CACertificatePath,
-        [int]$CAPort                      = 5665,
-        [bool]$ForceCertificateGeneration = $FALSE,
+        [int]$CAPort                        = 5665,
+        [switch]$ForceCertificateGeneration = $FALSE,
         [string]$CAFingerprint,
-        [switch]$CAProxy                  = $FALSE,
+        [switch]$CAProxy                    = $FALSE,
 
         # Director communication
         [string]$DirectorUrl,
@@ -45,29 +45,29 @@ function Icinga2AgentModule {
         [string]$DirectorDomain,
         [string]$DirectorAuthToken,
         [System.Object]$DirectorHostObject,
-        [bool]$DirectorDeployConfig       = $FALSE,
+        [switch]$DirectorDeployConfig       = $FALSE,
 
         # NSClient Installer
-        [bool]$InstallNSClient            = $FALSE,
-        [bool]$NSClientAddDefaults        = $FALSE,
-        [bool]$NSClientEnableFirewall     = $FALSE,
-        [bool]$NSClientEnableService      = $FALSE,
+        [switch]$InstallNSClient            = $FALSE,
+        [switch]$NSClientAddDefaults        = $FALSE,
+        [switch]$NSClientEnableFirewall     = $FALSE,
+        [switch]$NSClientEnableService      = $FALSE,
         [string]$NSClientDirectory,
         [string]$NSClientInstallerPath,
 
         # Uninstaller arguments
-        [bool]$FullUninstallation         = $FALSE,
-        [bool]$RemoveNSClient             = $FALSE,
+        [switch]$FullUninstallation         = $FALSE,
+        [switch]$RemoveNSClient             = $FALSE,
 
         # Dump Config arguments
-        [switch]$DumpIcingaConfig         = $FALSE,
-        [switch]$DumpIcingaObjects        = $FALSE,
+        [switch]$DumpIcingaConfig           = $FALSE,
+        [switch]$DumpIcingaObjects          = $FALSE,
 
         #Internal handling
-        [switch]$RunInstaller             = $FALSE,
-        [switch]$RunUninstaller           = $FALSE,
-        [switch]$IgnoreSSLErrors          = $FALSE,
-        [bool]$DebugMode                  = $FALSE,
+        [switch]$RunInstaller               = $FALSE,
+        [switch]$RunUninstaller             = $FALSE,
+        [switch]$IgnoreSSLErrors            = $FALSE,
+        [switch]$DebugMode                  = $FALSE,
         [string]$ModuleLogFile
     );
 

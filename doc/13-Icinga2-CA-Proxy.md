@@ -11,10 +11,10 @@ Full Example:
 ```powershell
     Icinga2AgentModule                                    `
               -InstallAgentVersion 2.8.0                  `
-              -AllowUpdates        $TRUE                  `
+              -AllowUpdates                               `
               -ParentZone          'icinga-master'        `
               -ParentEndpoints     'icinga2a', 'icinga2b' `
-              -FetchAgentFQDN      $TRUE                  `
+              -FetchAgentFQDN                             `
               -CAProxy                                    `
               -CACertificatePath   'C:\certs\ca.crt'      `
               -RunInstaller;

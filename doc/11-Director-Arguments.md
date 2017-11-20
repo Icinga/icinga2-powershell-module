@@ -72,7 +72,7 @@ For a simplier configuration in certain cases, you can use the [placeholders](31
 the hostname or the ip address.
 
 ### -DirectorDeployConfig
-If this parameter is set to **$TRUE**, the PowerShell module will tell the Icinga Director to deploy 
+If you add this parameter to your script call, the PowerShell module will tell the Icinga Director to deploy 
 outstanding configurations. This parameter can be used in combination with -DirectorHostObject, to 
 create objects and deploy them right away. This argument requires the user and password argument and 
 will not work with the Self Service api.

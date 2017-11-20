@@ -42,7 +42,7 @@ The PowerShell module provides a feature to enable / disable the Icinga 2 debug 
 log, simply use this function call:
 
 ```powershell
-    $icinga = Icinga2AgentModule -IcingaEnableDebugLog $TRUE
+    $icinga = Icinga2AgentModule -IcingaEnableDebugLog
 
     exit $icinga.install();
 ```
@@ -89,9 +89,9 @@ Icinga Director
 
 ```powershell
     $icinga = Icinga2AgentModule `
-              -InstallAgentVersion  '2.6.3' `
-              -AllowUpdates         $TRUE `
-              -FetchAgentFQDN       $TRUE `
+              -InstallAgentVersion  '2.8.0' `
+              -AllowUpdates                 `
+              -FetchAgentFQDN               `
               -DirectorUrl          'https://icinga2a-master.example.com/icingaweb2/director/' `
               -DirectorUser         'icingaadmin' `
               -DirectorPassword     'icinga' `
@@ -114,15 +114,15 @@ available values.
 
 ```powershell
     $icinga = Icinga2AgentModule `
-              -InstallAgentVersion  '2.6.3' `
-              -AllowUpdates         $TRUE `
-              -FetchAgentFQDN       $TRUE `
+              -InstallAgentVersion  '2.8.0' `
+              -AllowUpdates                 `
+              -FetchAgentFQDN               `
               -DirectorUrl          'https://icinga2a-master.example.com/icingaweb2/director/' `
               -DirectorUser         'icingaadmin' `
               -DirectorPassword     'icinga' `
               -DirectorHostObject   '{"object_name":"&hostname_placeholder&","object_type":"object","vars":{"os":"Windows"},"imports":["Icinga Agent"],"address":"&hostname_placeholder&","display_name":"&hostname_placeholder&"}' `
               -CAServer             'icinga2a-master.example.com' `
-              -DirectorDeployConfig $TRUE `
+              -DirectorDeployConfig `
               -ParentZone           'icinga2-master-zone' `
               -ParentEndpoints      'icinga2a-master.example.com', 'icinga2b-master.example.com' `
 

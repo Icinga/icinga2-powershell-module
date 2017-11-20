@@ -24,7 +24,7 @@ tell you which Ticket you will require for your host
 You can either leave this parameter or add it to allow the module to install or update the Icinga 2 
 Agent on your system. It has to be a string value and look like this for example:
 ```powershell
-    -InstallAgentVersion '2.6.3'
+    -InstallAgentVersion '2.8.0'
 ```
 
 **Important:** This argument is required in order to install, update or downgrade the Icinga 2
@@ -166,7 +166,7 @@ base download Url / Directory**, as the Module **will generate the MSI file name
 system architecture and the version to install**. The Icinga 2 MSI Installer name is internally build 
 as follows: *Icinga2-v[InstallAgentVersion]-[OSArchitecture].msi*
 
-Full example: Icinga2-v2.6.3-x86_64.msi
+Full example: Icinga2-v2.8.0-x86_64.msi
 
 Default value: **https://packages.icinga.com/windows/**
 
@@ -181,7 +181,7 @@ installed into. The old directory will be removed caused by the required uninsta
 **Examples:**
 ```powershell
     -AgentInstallDirectory 'C:\MyIcinga2Agent'
-    -AllowUpdates $TRUE -InstallAgentVersion '2.6.3' -AgentInstallDirectory 'C:\MyNewIcinga2Agent'
+    -AllowUpdates -InstallAgentVersion '2.8.0' -AgentInstallDirectory 'C:\MyNewIcinga2Agent'
 ```
 
 ## -AllowUpdates (optional)
@@ -214,7 +214,7 @@ package is not matching one of the provided hashes of this parameter.
 ## -FlushApiDirectory (optional)
 
 In case the Icinga Agent will accept configuration from the parent Icinga 2 system, it will possibly 
-write data to /var/lib/icinga2/api/* By setting this parameter to *$TRUE*, all content inside the api 
+write data to /var/lib/icinga2/api/* By adding this parameter to your script call, all content inside the api 
 directory will be flushed once a change is detected by the module which requires a restart of the 
 Icinga 2 Agent
 
@@ -236,7 +236,7 @@ Default value: **5665**
 ## -ForceCertificateGeneration (optional)
 
 The module will generate the certificates in general only if one of the required files is missing. By 
-setting this parameter to $TRUE, the module will force the re-creation of the certificates.
+adding this parameter to your call, the module will force the re-creation of the certificates.
 
 Default value: **$FALSE**
 
@@ -309,9 +309,9 @@ a custom variable and executing the uninstallation function of the monitoring co
 
 **Instead of**
 ```powershell
-    $icinga = Icinga2AgentModule `
-              -FullUninstallation $TRUE `
-              -RemoveNSClient $TRUE
+    $icinga = Icinga2AgentModule  `
+              -FullUninstallation `
+              -RemoveNSClient
 
     exit $icinga.uninstall();
 ```
@@ -319,8 +319,8 @@ a custom variable and executing the uninstallation function of the monitoring co
 **You can use**
 ```powershell
     exit Icinga2AgentModule `
-              -FullUninstallation $TRUE `
-              -RemoveNSClient $TRUE `
+              -FullUninstallation `
+              -RemoveNSClient     `
               -RunUninstaller;
 ```
 

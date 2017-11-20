@@ -1,6 +1,39 @@
 Changelog
 ==============
 
+1.2.0
+-----
+
+### Fixed issues and related features
+* You can find issues and feature requests related to this release on our
+[roadmap](https://github.com/Icinga/icinga2-powershell-module/milestone/3?closed=1)
+
+* Added support for Icinga 2.8.0 and above
+* Added support for Icinga 2 CA-Proxy
+* Changed argument boolean values to switch, which changes
+```powershell
+    -AllowUpdates $TRUE
+```
+
+to
+
+```powershell
+    -AllowUpdates
+```
+
+for example. This applies to all values, except for **-AcceptConfig**
+
+1.1.0
+-----
+
+### Fixed issues and related features
+* You can find issues and feature requests related to this release on our
+[roadmap](https://github.com/Icinga/icinga2-powershell-module/milestone/2?closed=1)
+
+* Added additional troubleshooting support for dumping Icinga 2 configuration and objects
+* Improved documentation for PowerShell 2 support and installation
+* Fixed code stylings
+
 1.0.0
 -----
 

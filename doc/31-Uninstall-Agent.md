@@ -13,12 +13,12 @@ This example will uninstall the Agent and remove the Program Data Directory as w
 that, you can remove the argument '-FullUninstallation'
 
 ```powershell
-    $icinga = Icinga2AgentModule -FullUninstallation $TRUE
+    $icinga = Icinga2AgentModule -FullUninstallation
 
     exit $icinga.uninstall();
 ```
 
 **Shorten the call**
 ```powershell
-    exit Icinga2AgentModule -FullUninstallation $TRUE -RunUninstaller;
+    exit Icinga2AgentModule -FullUninstallation -RunUninstaller;
 ```

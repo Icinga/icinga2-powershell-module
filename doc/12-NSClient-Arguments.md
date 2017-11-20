@@ -21,7 +21,7 @@ Default value: **$FALSE**
 ## -NSClientEnableFirewall
 By default the NSClient++ installer is adding an exception for the Windows Firewall, allowing the 
 external communication with the NSClient. By default the PowerShell module will remove this firewall 
-rule from the Windows System. To keep it, set this value to **$TRUE**
+rule from the Windows System. To keep it, add this argument to your script call.
 
 Default value: **$FALSE**
 
@@ -29,7 +29,7 @@ Default value: **$FALSE**
 By default a service is installed for the NSClient++, allowing remote checks like nrpe to connect in 
 case the NSClient++ is listening on an available port / ip and the firewall is setup correctly. By 
 default the service will be stopped and removed from the system by the PowerShell module. In case you 
-want to keep it, set this value to **$TRUE**
+want to keep it, add this argument to your script call.
 
 Default value: **$FALSE**
 
