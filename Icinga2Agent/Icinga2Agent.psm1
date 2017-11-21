@@ -1597,6 +1597,7 @@ object ApiListener "api" {' + $certificateConfig + '
         param([string]$hostname, [string]$certDir);
 
         $this.info('Generating Host certificates required by Icinga 2');
+        [string]$icingaBinary = Join-Path -Path $this.getInstallPath() -ChildPath 'sbin\icinga2.exe';
         $result = $this.startProcess($icingaBinary, $FALSE, [string]::Format('pki new-cert --cn {0} --key {1}{0}.key --cert {1}{0}.crt',
                                                                             $hostname,
                                                                             $certDir
