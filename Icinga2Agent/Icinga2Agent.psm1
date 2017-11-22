@@ -1010,8 +1010,13 @@ function Icinga2AgentModule {
 
         if (-Not $this.validateVersions('2.8.0', $this.getProperty('icinga2_agent_version'))) {
             $this.setProperty('cert_dir', (Join-Path -Path $this.getProperty('config_dir') -ChildPath 'pki'));
+            if ($this.getProperty('use_new_cert_dir')) {
+                $this.setProperty('require_cert_migration', $TRUE);
+                $this.info('You are downgrading from a newer Icinga 2 Version to a older one. This will require a certificate migration.');
+            }
         } else {
             $this.setProperty('cert_dir', (Join-Path -Path $Env:ProgramData -ChildPath 'icinga2\var\lib\icinga2\certs'));
+            $this.setProperty('use_new_cert_dir', $TRUE);
         }
 
         $this.info([string]::Format('Using Icinga version "{0}", setting certificate directory to "{1}"',
@@ -1745,6 +1750,40 @@ object ApiListener "api" {' + $certificateConfig + '
 
         $this.warn('CA fingerprint validation disabled');
         return $TRUE;
+    }
+
+    #
+    # In case we migrate from an Icinga 2 Version with the new certificate path to
+    # a version with the old one, we require to migrate the certificates
+    #
+    $installer | Add-Member -membertype ScriptMethod -name 'migrateCertificates' -value {
+        if (-Not $this.getProperty('require_cert_migration')) {
+            return;
+        }
+
+        [string]$agentName = $this.getProperty('local_hostname');
+
+        [string]$caPath = Join-Path -Path $Env:ProgramData -ChildPath 'icinga2\var\lib\icinga2\certs\ca.crt';
+        [string]$newCA = Join-Path -Path $this.getProperty('config_dir') -ChildPath 'pki\ca.crt';
+        [string]$certPath = Join-Path -Path $Env:ProgramData -ChildPath ([string]::Format('icinga2\var\lib\icinga2\certs\{0}.crt', $agentName));
+        [string]$newCertPath = Join-Path -Path $this.getProperty('config_dir') -ChildPath ([string]::Format('pki\{0}.crt', $agentName));
+        [string]$keyPath = Join-Path -Path $Env:ProgramData -ChildPath ([string]::Format('icinga2\var\lib\icinga2\certs\{0}.key', $agentName));
+        [string]$newKeyPath = Join-Path -Path $this.getProperty('config_dir') -ChildPath ([string]::Format('pki\{0}.key', $agentName));
+
+        if (Test-Path $caPath) {
+            Copy-Item $caPath $newCA;
+            $this.info([string]::Format('Migrating ca.crt from "{0}" to "{1}".', $caPath, $newCA));
+        }
+
+        if (Test-Path $certPath) {
+            Copy-Item $certPath $newCertPath;
+            $this.info([string]::Format('Migrating {0}.crt from "{1}" to "{2}".', $agentName, $certPath, $newCertPath));
+        }
+
+        if (Test-Path $keyPath) {
+            Copy-Item $keyPath $newKeyPath;
+            $this.info([string]::Format('Migrating {0}.crt from "{1}" to "{2}".', $agentName, $keyPath, $newKeyPath));
+        }
     }
 
     #
@@ -2982,6 +3021,8 @@ object ApiListener "api" {' + $certificateConfig + '
             # First check if we should get some parameters from the Icinga Director
             $this.fetchTicketFromIcingaDirector();
 
+            # In case we downgrade from Icinga 2.8.0 or above to a older version (like Icinga 2.7.2)
+            $this.migrateCertificates();
             if (-Not $this.hasCertificates() -Or $this.forceCertificateGeneration()) {
                 $this.generateCertificates();
             } else {
