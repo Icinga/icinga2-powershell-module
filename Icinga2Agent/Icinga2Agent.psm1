@@ -1399,6 +1399,40 @@ function Icinga2AgentModule {
         }
     }
 
+    #
+    # This function will determine if and how we create the
+    # API-Listener configuration
+    #
+    $installer | Add-Member -membertype ScriptMethod -name 'getApiListenerConfiguration' -value {
+        if (-Not $this.hasCertificates() -And -Not $this.getProperty('certs_created')) {
+            $this.warn('Configuring Icinga 2 Agent without ApiListener, as certificates have not been generated.');
+            return [string]::Format('{0}/* ApiListener has not been configured, as certificates have not been generated. */', "`n`n");
+        }
+
+        [string]$apiListenerConfig = '';
+        [string]$certificateConfig = '';
+        # Icinga 2 Agent Versions below 2.8.0 will require cert_path, key_path and ca_path
+        if (-Not $this.validateVersions('2.8.0', $this.getProperty('icinga2_agent_version'))) {
+            $certificateConfig = '
+  cert_path = SysconfDir + "/icinga2/pki/' + $this.getProperty('local_hostname') + '.crt"
+  key_path = SysconfDir + "/icinga2/pki/' + $this.getProperty('local_hostname') + '.key"
+  ca_path = SysconfDir + "/icinga2/pki/ca.crt"';
+        }
+
+        $apiListenerConfig = '
+object ApiListener "api" {' + $certificateConfig + '
+  accept_commands = true
+  accept_config = ' + $this.convertBoolToString($this.config('accept_config')) + '
+  bind_host = "::"
+  bind_port = ' + [int]$this.config('agent_listen_port') + '
+}';
+
+        return $apiListenerConfig;
+    }
+
+    #
+    # Generate the new configuration for Icinga 2
+    #
     $installer | Add-Member -membertype ScriptMethod -name 'generateIcingaConfiguration' -value {
         if ($this.getProperty('generate_config') -eq 'true') {
 
@@ -1407,15 +1441,6 @@ function Icinga2AgentModule {
             [string]$icingaCurrentConfig = '';
             if (Test-Path $this.getIcingaConfigFile()) {
                 $icingaCurrentConfig = [System.IO.File]::ReadAllText($this.getIcingaConfigFile());
-            }
-
-            [string]$certificateConfig = '';
-            # Icinga 2 Agent Versions below 2.8.0 will require cert_path, key_path and ca_path
-            if (-Not $this.validateVersions('2.8.0', $this.getProperty('icinga2_agent_version'))) {
-                $certificateConfig = '
-  cert_path = SysconfDir + "/icinga2/pki/' + $this.getProperty('local_hostname') + '.crt"
-  key_path = SysconfDir + "/icinga2/pki/' + $this.getProperty('local_hostname') + '.key"
-  ca_path = SysconfDir + "/icinga2/pki/ca.crt"';
             }
 
             [string]$icingaNewConfig =
@@ -1492,13 +1517,7 @@ object Zone "' + $this.getProperty('local_hostname') + '" {
  * This will include the certificates, if we accept configurations which
  * can be changed with argument -AcceptConfig and the bind informations.
  * The bind_port can be modified with argument -AgentListenPort.
- */
-object ApiListener "api" {' + $certificateConfig + '
-  accept_commands = true
-  accept_config = ' + $this.convertBoolToString($this.config('accept_config')) + '
-  bind_host = "::"
-  bind_port = ' + [int]$this.config('agent_listen_port') + '
-}';
+ */' + $this.getApiListenerConfiguration();
 
             $this.setProperty('new_icinga_config', $icingaNewConfig);
             $this.setProperty('old_icinga_config', $icingaCurrentConfig);
@@ -1681,6 +1700,7 @@ object ApiListener "api" {' + $certificateConfig + '
                 return;
             }
             Copy-Item $this.config('ca_certificate_path') $caDestPath;
+            $this.setProperty('certs_created', $TRUE);
             return;
         }
 
@@ -1725,6 +1745,7 @@ object ApiListener "api" {' + $certificateConfig + '
             $this.info($result.Get_Item('message'));
             $this.fixCertificateNames($agentName, $icingaCertDir);
             $this.setProperty('require_restart', 'true');
+            $this.setProperty('certs_created', $TRUE);
         } else  {
             $this.info('Skipping certificate generation. One or more of the following arguments is not set: -CAServer <server> -Ticket <ticket>');
         }
