@@ -734,7 +734,13 @@ function Icinga2AgentModule {
         if (-Not $this.config('download_url') -Or -Not $this.getProperty('install_msi_package')) {
             return '';
         }
-        $installerPath = Join-Path -Path $this.config('download_url') -ChildPath $this.getProperty('install_msi_package')
+        [string]$installerPath = '';
+        if (Test-Path ($this.config('download_url'))) {
+            $installerPath = Join-Path -Path $this.config('download_url') -ChildPath $this.getProperty('install_msi_package');
+        } else {
+            $installerPath = [string]::Format('{0}/{1}', $this.config('download_url'), $this.getProperty('install_msi_package'));
+        }
+
         if ($this.isDownloadPathLocal()) {
             if (Test-Path $installerPath) {
                 return $installerPath;
