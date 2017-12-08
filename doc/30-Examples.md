@@ -12,7 +12,7 @@ The module is designed to work as simple PowerShell script which can either be e
 PowerShell or by parsing the entire content into a PowerShell console.
 To make the script executable from within the PowerShell, rename it from .psm1 to .ps1
 
-### Simle examples as script
+### Simple examples as script
 
 To use the module (or as script) you will at first have to initialise a variable with the function 
 including parameters
