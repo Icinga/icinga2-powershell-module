@@ -944,6 +944,10 @@ function Icinga2AgentModule {
             $this.info('Icinga 2 Agent installed.');
         }
 
+        # Update the Icinga 2 Agent Directories in case of a version change
+        # Required by updating from older versions to 2.8.0. and newer
+        $return = $this.isAgentInstalled();
+
         $this.setProperty('require_restart', 'true');
     }
 
