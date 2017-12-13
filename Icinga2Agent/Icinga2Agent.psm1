@@ -4,15 +4,13 @@
 .DESCRIPTION
    More Information on https://github.com/Icinga/icinga2-powershell-module
 .EXAMPLE
-       $icinga = Icinga2AgentModule
-       $icinga = Icinga2AgentModule `
-              -AgentName        'windows-host-name' `
-              -Ticket           '3459843583450834508634856383459' `
-              -ParentZone       'icinga-master' `
-              -ParentEndpoints  'icinga2a', 'icinga2b' `
-              -CAServer         'icinga-master'
-
-    exit $icinga.install();
+       exit $icinga = Icinga2AgentModule `
+                   -AgentName        'windows-host-name' `
+                   -Ticket           '3459843583450834508634856383459' `
+                   -ParentZone       'icinga-master' `
+                   -ParentEndpoints  'icinga2a', 'icinga2b' `
+                   -CAServer         'icinga-master' `
+                   -RunInstaller;
  .NOTES
     
 #>
