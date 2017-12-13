@@ -57,8 +57,8 @@ function Icinga2AgentModule {
         # Agent installation / update
         <# This argument will allow to override the user the Icinga 2 service is running with. Windows provides some basic users already which can be configured:
 
-        LocalSystem (Icinga default)
-        NT AUTHORITY\NetworkService
+        LocalSystem
+        NT AUTHORITY\NetworkService (Icinga default)
         NT AUTHORITY\LocalService
         If you require an own user, you can add that one as well for the argument. If a password is required for the user to login, seperate username and password with a ':'.
 
@@ -1308,7 +1308,7 @@ function Icinga2AgentModule {
         # Try to update the service name and return an error in case of a failure
         # In the error case we do not have to deal with cleanup, as no change was made anyway
         $this.info([string]::Format('Updating Icinga 2 service user to {0}', $newUser));
-        $result = $this.startProcess('sc.exe', $TRUE, [string]::Format('config icinga2 obj="{0}"{1}', $newUser, $password));
+        $result = $this.startProcess('sc.exe', $TRUE, [string]::Format('config icinga2 obj= "{0}"{1}', $newUser, $password));
 
         if ($result.Get_Item('exitcode') -ne 0) {
             $this.error($result.Get_Item('message'));
@@ -1322,24 +1322,24 @@ function Icinga2AgentModule {
         $result = $this.restartService('icinga2');
 
         # In case of an error try to rollback to the previous assigned user of the service
-        # If this fails aswell, set the user to 'LocalSystem' and restart the service to
+        # If this fails aswell, set the user to 'NT AUTHORITY\NetworkService' and restart the service to
         # ensure that the agent is atleast running and collecting some data.
         # Of course we throw plenty of errors to notify the user about problems
         if ($result.Get_Item('exitcode') -ne 0) {
             $this.error($result.Get_Item('message'));
             $this.info([string]::Format('Reseting user to previous working user {0}', $currentUser.StartName));
-            $result = $this.startProcess('sc.exe', $TRUE, [string]::Format('config icinga2 obj="{0}"{1}', $currentUser.StartName, $password));
+            $result = $this.startProcess('sc.exe', $TRUE, [string]::Format('config icinga2 obj= "{0}"{1}', $currentUser.StartName, $password));
             $result = $this.restartService('icinga2');
             if ($result.Get_Item('exitcode') -ne 0) {
-                $this.error([string]::Format('Failed to reset Icinga 2 service user to the previous user "{0}". Setting user to "LocalSystem" now to ensure the service integrity', $currentUser.StartName));
-                $result = $this.startProcess('sc.exe', $TRUE, 'config icinga2 obj="LocalSystem" password=dummy');
+                $this.error([string]::Format('Failed to reset Icinga 2 service user to the previous user "{0}". Setting user to "NT AUTHORITY\NetworkService" now to ensure the service integrity', $currentUser.StartName));
+                $result = $this.startProcess('sc.exe', $TRUE, 'config icinga2 obj= "NT AUTHORITY\NetworkService" password=dummy');
                 $this.info($result.Get_Item('message'));
                 $result = $this.restartService('icinga2');
                 if ($result.Get_Item('exitcode') -eq 0) {
-                    $this.info('Reseting Icinga 2 service user to "LocalSystem" successfull.');
+                    $this.info('Reseting Icinga 2 service user to "NT AUTHORITY\NetworkService" successfull.');
                     return;
                 } else {
-                    $this.error([string]::Format('Failed to rollback Icinga 2 service user to "LocalSystem": {0}', $result.Get_Item('message')));
+                    $this.error([string]::Format('Failed to rollback Icinga 2 service user to "NT AUTHORITY\NetworkService": {0}', $result.Get_Item('message')));
                     return;
                 }
             }

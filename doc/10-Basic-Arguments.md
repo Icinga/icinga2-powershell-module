@@ -145,8 +145,8 @@ when adding custom global-zones.
 This argument will allow to override the user the Icinga 2 service is running with. Windows provides
 some basic users already which can be configured:
 
-* LocalSystem (Icinga default)
-* NT AUTHORITY\NetworkService
+* LocalSystem
+* NT AUTHORITY\NetworkService (Icinga default)
 * NT AUTHORITY\LocalService
 
 If you require an own user, you can add that one as well for the argument. If a password is required
