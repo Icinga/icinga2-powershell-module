@@ -1,51 +1,119 @@
+<#
+.Synopsis
+   Icinga 2 PowerShell Module - the most flexible and easy way to configure and install Icinga 2 Agents on Windows. 
+.DESCRIPTION
+   More Information on https://github.com/Icinga/icinga2-powershell-module
+.EXAMPLE
+       exit $icinga = Icinga2AgentModule `
+                   -AgentName        'windows-host-name' `
+                   -Ticket           '3459843583450834508634856383459' `
+                   -ParentZone       'icinga-master' `
+                   -ParentEndpoints  'icinga2a', 'icinga2b' `
+                   -CAServer         'icinga-master' `
+                   -RunInstaller;
+ .NOTES
+    
+#>
 function Icinga2AgentModule {
+    
     #
     # Setup parameters which can be accessed
     # with -<ParamName>
     #
+    [CmdletBinding()]
     param(
-        # Agent setup
+       
+        # This is in general the name of your Windows host. It will have to match with your Icinga configuration, as it is part of the Icinga 2 Ticket and Certificate handling to ensure a valid certificate is generated
         [string]$AgentName,
+        # The Ticket you will receive from your Icinga 2 CA. In combination with the Icinga Director, it will tell you which Ticket you will require for your host
         [string]$Ticket,
+        # You can either leave this parameter or add it to allow the module to install or update the Icinga 2 Agent on your system
         [string]$InstallAgentVersion,
+        # Instead of setting the Agent Name with -AgentName, the PowerShell module is capable of retreiving the information automaticly from Windows. Please note this is not the FQDN
         [switch]$FetchAgentName             = $FALSE,
+        # Like -FetchAgentName, this argument will ensure the hostname is set inside the script, will however include the domain to provide the FQDN internally.
         [switch]$FetchAgentFQDN             = $FALSE,
-		[string]$FetchAgentExternalFQDN,               
+        # This argument will fetch the external FQDN and resolve it with an external address instead of the internal one
+        [switch]$FetchAgentExternalFQDN     = $FALSE;
+        # Allows to transform the hostname to either lower or upper case if required. 0: Do nothing 1: To lower case 2: To upper case
         [int]$TransformHostname             = 0,
 
-        # Agent configuration
+        # This variable allows to specify on which port the Icinga 2 Agent will listen on
         [int]$AgentListenPort               = 5665,
-        [string]$ParentZone,
+        # Each Icinga 2 Agent is in general forwarding it's check results to a parent master or satellite zone. Here you will have to specify the name of the parent zone
+        [string]$ParentZone,#
+        # Icinga 2 internals to make it configurable if the Agent is accepting configuration from the Icinga config master.
         [bool]$AcceptConfig                 = $TRUE,
+        # This argument will define if the Icinga 2 debug log will be enabled or disabled.
         [switch]$IcingaEnableDebugLog       = $FALSE,
+        # Allows to specify if the PowerShell Module will add a firewall rule, allowing Icinga 2 masters or Satellites to connect to the Icinga 2 Agent on the defined port
         [switch]$AgentAddFirewallRule       = $FALSE,
+        # This parameter requires an array of string values, to which endpoints the Agent should in general connect to. If you are only having one endpoint, only add one. You will have to specify all endpoints the Agent requires to connect to
         [array]$ParentEndpoints,
+        # While -ParentEndpoints will define the name of endpoints by an array, this parameter will allow to assign IP address and port configuration, allowing the Icinga 2 Agent to directly connect to parent Icinga 2 instances. To specify IP address and port, you will have to seperate these entries by using ';' without blank spaces. The order of the config has to match the assignment of -ParentEndpoints. You can specify the IP address only without a port definition by just leaving the last part. If you wish to not specify a config for a specific endpoint, simply add an empty string to the correct location.
         [array]$EndpointsConfig,
+        # Allows to specify global zones, which will be added into the icinga2.conf. Note: In case no global zone will be defined, director-global will be added by default. If you specify zones by yourself, please ensure to add director-global as this is not done automaticly when adding custom global-zones.
         [array]$GlobalZones                 = @( 'director-global' ),
+        
 
         # Agent installation / update
-        [string]$IcingaServiceUser,
-        [string]$DownloadUrl                = 'https://packages.icinga.com/windows/',
-        [string]$AgentInstallDirectory,
-        [switch]$AllowUpdates               = $FALSE,
-        [array]$InstallerHashes,
-        [switch]$FlushApiDirectory          = $FALSE,
+        <# This argument will allow to override the user the Icinga 2 service is running with. Windows provides some basic users already which can be configured:
 
-        # Agent signing
+        LocalSystem
+        NT AUTHORITY\NetworkService (Icinga default)
+        NT AUTHORITY\LocalService
+        If you require an own user, you can add that one as well for the argument. If a password is required for the user to login, seperate username and password with a ':'.
+
+        Example: jdoe:mysecretpassword
+
+        Furthermore you can also use domains in combination and pass them over.
+
+        Example: icinga\jdoe:mysecretpassword[string]$IcingaServiceUser,
+        #>
+        [string]$IcingaServiceUser,
+        #With this parameter you can define a download Url or local directory from which the module will download/install a specific Icinga 2 Agent MSI Installer package. Please ensure to only define the base download Url / Directory, as the Module will generate the MSI file name based on your operating system architecture and the version to install. The Icinga 2 MSI Installer name is internally build as follows: Icinga2-v[InstallAgentVersion]-[OSArchitecture].msi
+
+        # Full example: Icinga2-v2.8.0-x86_64.msi
+        [string]$DownloadUrl                = 'https://packages.icinga.com/windows/',
+        # Allows to specify in which directory the Icinga 2 Agent will be installed into. In case of an Agent update you can specify with this argument a new directory the new Agent will be installed into. The old directory will be removed caused by the required uninstaller process.
+        [string]$AgentInstallDirectory,
+        # In case the Icinga 2 Agent is already installed on the system, this parameter will allow you to configure if you wish to upgrade / downgrade to a specified version with the -InstallAgentVersion parameter as well. If none of both parameters is defined, the module will not update or downgrade the agent.
+        # If argument -AgentInstallDirectory is not specified, the Icinga 2 Agent will be installed into the same directory as before. In case defined, the PowerShell Module will use the new directory as installation target.
+        [switch]$AllowUpdates               = $FALSE,
+        # To ensure downloaded packages are build by the Icinga Team and not compromised by third parties, you will be able to provide an array of SHA1 hashes here. In case you have defined any hashses, the module will not continue with updating / installing the Agent in case the SHA1 hash of the downloaded MSI package is not matching one of the provided hashes of this parameter.
+        [array]$InstallerHashes,
+        # In case the Icinga Agent will accept configuration from the parent Icinga 2 system, it will possibly write data to /var/lib/icinga2/api/* By adding this parameter to your script call, all content inside the api directory will be flushed once a change is detected by the module which requires a restart of the Icinga 2 Agent
+        [switch]$FlushApiDirectory          = $FALSE,
+        
+        # Here you can provide a string to the Icinga 2 CA or any other CA responsible to generate the required certificates for the SSL communication between the Icinga 2 Agent and it's parent
         [string]$CAServer,
+        # TODO
         [string]$CACertificatePath,
+        # Here you can specify a custom port in case your CA Server is not listening on 5665 
         [int]$CAPort                        = 5665,
+        # The module will generate the certificates in general only if one of the required files is missing. By adding this parameter to your call, the module will force the re-creation of the certificates.
         [switch]$ForceCertificateGeneration = $FALSE,
+        # This option will allow the validation of the trusted-master.crt generated during certificate generation, to ensure we are connected to the correct endpoint to prevent possible man-in-the-middle attacks.
         [string]$CAFingerprint,
+        # Use this switch to enable the CAProxy feature Introduced with Icinga 2.8
         [switch]$CAProxy                    = $FALSE,
 
         # Director communication
+        #This argument will tell the PowerShell where the Icinga Director can be found. Please specify the entire path to the Icinga Director! Example: https://example.com/icingaweb2/director/
         [string]$DirectorUrl,
+        #To fetch the Ticket for a host, creating host objects or deploying the configuration you will have to authenticate against the Icinga Director. This parameter allows to set the User we shall use to login.
         [string]$DirectorUser,
+        # To fetch the Ticket for a host, creating host objects or deploying the configuration you will have to authenticate against the Icinga Director. This parameter allows to set the Password we shall use to login.
         [string]$DirectorPassword,
+        # TODO
         [string]$DirectorDomain,
+        # API key for specific host templates, allowing the configuration and creation of host objects within the Icinga Director without password authentication. This is the API token assigned to a host template. Hosts created with this token, will automaticly receive the Host-Template assigned to the API key. Furthermore this token allows to access the Icinga Director Self-Service API to fetch basic arguments for the module.
+        # Note: This argument requires Icinga Director API Version 1.4.0 or higher
         [string]$DirectorAuthToken,
+        # This argument allows you to parse either a valid JSON-String or an hashtable / array, containing all informations for the host object to create. Please note that using arrays or hashtable objects for this argument will require PowerShell version 3 and above.
         [System.Object]$DirectorHostObject,
+        # If you add this parameter to your script call, the PowerShell module will tell the Icinga Director to deploy outstanding configurations. This parameter can be used in combination with -DirectorHostObject, to create objects and deploy them right away. This argument requires the user and password argument and will not work with the Self Service api.
+        # Caution: If set, all outstanding deployments inside the Icinga Director will be deployed. Use with caution!!!
         [switch]$DirectorDeployConfig       = $FALSE,
 
         # NSClient Installer
@@ -57,18 +125,27 @@ function Icinga2AgentModule {
         [string]$NSClientInstallerPath,
 
         # Uninstaller arguments
+        # This argument is only used by the function 'uninstall' and will remove the remaining content from 'C:\Program Data\icinga2' to prepare a clean setup of the Icinga 2 infrastrucure.
         [switch]$FullUninstallation         = $FALSE,
+        # When this argument is set, the installed NSClient++ will be removed from the system as well. This argument is only used by calling the function 'uninstall'
         [switch]$RemoveNSClient             = $FALSE,
 
-        # Dump Config arguments
+        # Dump Icinga Config 
         [switch]$DumpIcingaConfig           = $FALSE,
+        # Dump Icinga Objects
         [switch]$DumpIcingaObjects          = $FALSE,
 
         #Internal handling
+        # This argument allows to shorten the entire call of the module, not requiring to define a custom variable and executing the installation function of the monitoring components.
         [switch]$RunInstaller               = $FALSE,
+        # This argument allows to shorten the entire call of the module, not requiring to define a custom variable and executing the uninstallation function of the monitoring components.
         [switch]$RunUninstaller             = $FALSE,
+        #In certain cases it could be required to ingore SSL certificate validations from the Icinga Web 2 installation (for example in case self-signed certificates are used). By default the PowerShell Module is validating SSL certificates and throws an error if the validation fails.
+        #In case self-signed certificates are used and not included to the local certificate store of the Windows machine, the module will fail. By providing this argument, validation will always be valid and the script will execute as if the certificate was valid.
         [switch]$IgnoreSSLErrors            = $FALSE,
+
         [switch]$DebugMode                  = $FALSE,
+        # Specify a path to either a directory or a file to write all output from the PowerShell module into a file for later debugging. In case a directory is specified, the script will automaticly create a new file with a unique name into it. If a file is specified which is not yet present, it will be created.
         [string]$ModuleLogFile
     );
 
@@ -79,51 +156,51 @@ function Icinga2AgentModule {
     $installer = New-Object -TypeName PSObject;
     $installer | Add-Member -membertype NoteProperty -name 'properties' -value @{}
     $installer | Add-Member -membertype NoteProperty -name 'cfg' -value @{
-        agent_name              = $AgentName;
-        ticket                  = $Ticket;
-        agent_version           = $InstallAgentVersion;
-        fetch_agent_name        = $FetchAgentName;
-        fetch_agent_fqdn        = $FetchAgentFQDN;
-		fetch_agent_external_fqdn = $FetchAgentExternalFQDN;
-        transform_hostname      = $TransformHostname;
-        agent_listen_port       = $AgentListenPort;
-        parent_zone             = $ParentZone;
-        accept_config           = $AcceptConfig;
-        icinga_enable_debug_log = $IcingaEnableDebugLog;
-        agent_add_firewall_rule = $AgentAddFirewallRule;
-        parent_endpoints        = $ParentEndpoints;
-        endpoints_config        = $EndpointsConfig;
-        global_zones            = $GlobalZones;
-        icinga_service_user     = $IcingaServiceUser;
-        download_url            = $DownloadUrl;
-        agent_install_directory = $AgentInstallDirectory;
-        allow_updates           = $AllowUpdates;
-        installer_hashes        = $InstallerHashes;
-        flush_api_directory     = $FlushApiDirectory;
-        ca_server               = $CAServer;
-        ca_certificate_path     = $CACertificatePath;
-        ca_port                 = $CAPort;
-        force_cert              = $ForceCertificateGeneration;
-        ca_fingerprint          = $CAFingerprint;
-        caproxy                 = $CAProxy;
-        director_url            = $DirectorUrl;
-        director_user           = $DirectorUser;
-        director_password       = $DirectorPassword;
-        director_domain         = $DirectorDomain;
-        director_auth_token     = $DirectorAuthToken;
-        director_host_object    = $DirectorHostObject;
-        director_deploy_config  = $DirectorDeployConfig;
-        install_nsclient        = $InstallNSClient;
-        nsclient_add_defaults   = $NSClientAddDefaults;
-        nsclient_firewall       = $NSClientEnableFirewall;
-        nsclient_service        = $NSClientEnableService;
-        nsclient_directory      = $NSClientDirectory;
-        nsclient_installer_path = $NSClientInstallerPath;
-        full_uninstallation     = $FullUninstallation;
-        remove_nsclient         = $RemoveNSClient;
-        ignore_ssl_errors       = $IgnoreSSLErrors;
-        debug_mode              = $DebugMode;
-        module_log_file         = $ModuleLogFile;
+        agent_name                = $AgentName;
+        ticket                    = $Ticket;
+        agent_version             = $InstallAgentVersion;
+        fetch_agent_name          = $FetchAgentName;
+        fetch_agent_fqdn          = $FetchAgentFQDN;
+        fetch_agent_external_fqdn = $FetchAgentExternalFQDN;
+        transform_hostname        = $TransformHostname;
+        agent_listen_port         = $AgentListenPort;
+        parent_zone               = $ParentZone;
+        accept_config             = $AcceptConfig;
+        icinga_enable_debug_log   = $IcingaEnableDebugLog;
+        agent_add_firewall_rule   = $AgentAddFirewallRule;
+        parent_endpoints          = $ParentEndpoints;
+        endpoints_config          = $EndpointsConfig;
+        global_zones              = $GlobalZones;
+        icinga_service_user       = $IcingaServiceUser;
+        download_url              = $DownloadUrl;
+        agent_install_directory   = $AgentInstallDirectory;
+        allow_updates             = $AllowUpdates;
+        installer_hashes          = $InstallerHashes;
+        flush_api_directory       = $FlushApiDirectory;
+        ca_server                 = $CAServer;
+        ca_certificate_path       = $CACertificatePath;
+        ca_port                   = $CAPort;
+        force_cert                = $ForceCertificateGeneration;
+        ca_fingerprint            = $CAFingerprint;
+        caproxy                   = $CAProxy;
+        director_url              = $DirectorUrl;
+        director_user             = $DirectorUser;
+        director_password         = $DirectorPassword;
+        director_domain           = $DirectorDomain;
+        director_auth_token       = $DirectorAuthToken;
+        director_host_object      = $DirectorHostObject;
+        director_deploy_config    = $DirectorDeployConfig;
+        install_nsclient          = $InstallNSClient;
+        nsclient_add_defaults     = $NSClientAddDefaults;
+        nsclient_firewall         = $NSClientEnableFirewall;
+        nsclient_service          = $NSClientEnableService;
+        nsclient_directory        = $NSClientDirectory;
+        nsclient_installer_path   = $NSClientInstallerPath;
+        full_uninstallation       = $FullUninstallation;
+        remove_nsclient           = $RemoveNSClient;
+        ignore_ssl_errors         = $IgnoreSSLErrors;
+        debug_mode                = $DebugMode;
+        module_log_file           = $ModuleLogFile;
     }
 
     #
@@ -870,6 +947,10 @@ function Icinga2AgentModule {
             $this.info('Icinga 2 Agent installed.');
         }
 
+        # Update the Icinga 2 Agent Directories in case of a version change
+        # Required by updating from older versions to 2.8.0. and newer
+        $return = $this.isAgentInstalled();
+
         $this.setProperty('require_restart', 'true');
     }
 
@@ -1230,7 +1311,7 @@ function Icinga2AgentModule {
         # Try to update the service name and return an error in case of a failure
         # In the error case we do not have to deal with cleanup, as no change was made anyway
         $this.info([string]::Format('Updating Icinga 2 service user to {0}', $newUser));
-        $result = $this.startProcess('sc.exe', $TRUE, [string]::Format('config icinga2 obj="{0}"{1}', $newUser, $password));
+        $result = $this.startProcess('sc.exe', $TRUE, [string]::Format('config icinga2 obj= "{0}"{1}', $newUser, $password));
 
         if ($result.Get_Item('exitcode') -ne 0) {
             $this.error($result.Get_Item('message'));
@@ -1244,24 +1325,24 @@ function Icinga2AgentModule {
         $result = $this.restartService('icinga2');
 
         # In case of an error try to rollback to the previous assigned user of the service
-        # If this fails aswell, set the user to 'LocalSystem' and restart the service to
+        # If this fails aswell, set the user to 'NT AUTHORITY\NetworkService' and restart the service to
         # ensure that the agent is atleast running and collecting some data.
         # Of course we throw plenty of errors to notify the user about problems
         if ($result.Get_Item('exitcode') -ne 0) {
             $this.error($result.Get_Item('message'));
             $this.info([string]::Format('Reseting user to previous working user {0}', $currentUser.StartName));
-            $result = $this.startProcess('sc.exe', $TRUE, [string]::Format('config icinga2 obj="{0}"{1}', $currentUser.StartName, $password));
+            $result = $this.startProcess('sc.exe', $TRUE, [string]::Format('config icinga2 obj= "{0}"{1}', $currentUser.StartName, $password));
             $result = $this.restartService('icinga2');
             if ($result.Get_Item('exitcode') -ne 0) {
-                $this.error([string]::Format('Failed to reset Icinga 2 service user to the previous user "{0}". Setting user to "LocalSystem" now to ensure the service integrity', $currentUser.StartName));
-                $result = $this.startProcess('sc.exe', $TRUE, 'config icinga2 obj="LocalSystem" password=dummy');
+                $this.error([string]::Format('Failed to reset Icinga 2 service user to the previous user "{0}". Setting user to "NT AUTHORITY\NetworkService" now to ensure the service integrity', $currentUser.StartName));
+                $result = $this.startProcess('sc.exe', $TRUE, 'config icinga2 obj= "NT AUTHORITY\NetworkService" password=dummy');
                 $this.info($result.Get_Item('message'));
                 $result = $this.restartService('icinga2');
                 if ($result.Get_Item('exitcode') -eq 0) {
-                    $this.info('Reseting Icinga 2 service user to "LocalSystem" successfull.');
+                    $this.info('Reseting Icinga 2 service user to "NT AUTHORITY\NetworkService" successfull.');
                     return;
                 } else {
-                    $this.error([string]::Format('Failed to rollback Icinga 2 service user to "LocalSystem": {0}', $result.Get_Item('message')));
+                    $this.error([string]::Format('Failed to rollback Icinga 2 service user to "NT AUTHORITY\NetworkService": {0}', $result.Get_Item('message')));
                     return;
                 }
             }
@@ -2053,29 +2134,33 @@ object Zone "' + $this.getProperty('local_hostname') + '" {
     # from the PowerShell to make things more
     # easier
     #
-
-$installer | Add-Member -membertype ScriptMethod -name 'fetchHostnameOrFQDN' -value {
-        if ($this.config('fetch_agent_fqdn') -And (Get-WmiObject win32_computersystem).Domain) {    #KMI
-            #[string]$hostname = (Get-WmiObject win32_computersystem).DNSHostName + '.' + (Get-WmiObject win32_computersystem).Domain;  #Alt RWL
-			[string]$hostname = [System.Net.Dns]::GetHostEntry([string]$env:computername).HostName;
+    $installer | Add-Member -membertype ScriptMethod -name 'fetchHostnameOrFQDN' -value {
+        if ($this.config('fetch_agent_fqdn') -And (Get-WmiObject win32_computersystem).Domain) {
+            [string]$hostname = [string]::Format('{0}.{1}',
+                                                (Get-WmiObject win32_computersystem).DNSHostName,
+                                                (Get-WmiObject win32_computersystem).Domain
+                                                );
             $this.setProperty('local_hostname', $hostname);
-            $this.info('Setting internal Agent Name to ' + $this.getProperty('local_hostname'));
-			
-        } 
-		elseif (if ($this.config('fetch_agent_external_fqdn'))) {
-				[string]$hostname = [System.Net.Dns]::GetHostEntry([string]"localhost").HostName;
-								$this.setProperty('local_hostname', $hostname);
-				$this.info('Setting internal Agent Name to ' + $this.getProperty('local_hostname'));
-				
+            $this.info([string]::Format('Setting internal Agent Name to "{0}"', $this.getProperty('local_hostname')));
+        } elseif ($this.config('fetch_agent_external_fqdn')) {
+            if ($PSVersionTable.PSVersion.Major -lt 3) {
+                [string]$errorMessage = 'You are trying to fetch the external FQDN for this host which is only supported by PowerShell Version 3 or higher.' +
+                                        'Please use either the regular FQDN, Hostname or assign a custom Agent name. In addition you can use a newer ' +
+                                        'version of PowerShell if available on your system and run the script again with the same arguments. ' +
+                                        'Documentation: https://github.com/Icinga/icinga2-powershell-module/blob/master/doc/10-Basic-Arguments.md';
+                $this.exception($errorMessage);
+                throw 'PowerShell Version exception.';
+            }
+            [string]$hostname = [System.Net.Dns]::GetHostEntry([string]"localhost").HostName;
+            $this.setProperty('local_hostname', $hostname);
+            $this.info([string]::Format('Setting internal Agent Name to "{0}"', $this.getProperty('local_hostname')));
+        } elseif ($this.config('fetch_agent_name')) {
+            [string]$hostname = (Get-WmiObject win32_computersystem).DNSHostName;
+            $this.setProperty('local_hostname', $hostname);
+            $this.info([string]::Format('Setting internal Agent Name to "{0}"', $this.getProperty('local_hostname')));
+        }
 
-		elseif (if ($this.config('fetch_agent_name')) {
-				[string]$hostname = (Get-WmiObject win32_computersystem).DNSHostName;
-				$this.setProperty('local_hostname', $hostname);
-				$this.info('Setting internal Agent Name to ' + $this.getProperty('local_hostname'));
-				
-				})
-				}
-		# Add additional variables to our config for more user-friendly usage
+        # Add additional variables to our config for more user-friendly usage
         [string]$host_fqdn = [string]::Format('{0}.{1}',
                                                 (Get-WmiObject win32_computersystem).DNSHostName,
                                                 (Get-WmiObject win32_computersystem).Domain
@@ -3228,4 +3313,3 @@ $installer | Add-Member -membertype ScriptMethod -name 'fetchHostnameOrFQDN' -va
     # Otherwise handle everything as before
     return $installer;
 }
-	
