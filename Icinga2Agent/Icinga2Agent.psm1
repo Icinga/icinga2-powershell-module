@@ -1149,8 +1149,9 @@ function Icinga2AgentModule {
             }
         }
 
+        [string]$binaryPath = Join-Path $this.getInstallPath() -ChildPath 'sbin\icinga2.exe';
         [string]$argument = 'advfirewall firewall add rule'
-        $argument += [string]::Format(' dir=in action=allow program="{0}sbin\icinga2.exe"', $this.getInstallPath());
+        $argument += [string]::Format(' dir=in action=allow program="{0}"', $binaryPath);
         $argument += ' name="Icinga 2 Agent Inbound by PS-Module"';
         $argument += ' description="Inbound Firewall Rule to allow Icinga 2 masters/satellites to connect to the Icinga 2 Agent installed on this system."';
         $argument += ' enable=yes';
