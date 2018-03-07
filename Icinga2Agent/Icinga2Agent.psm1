@@ -687,7 +687,7 @@ function Icinga2AgentModule {
             return $result;
         }
 
-        $this.exception('Could not retreive response from remote server. Response is null');
+        $this.exception('Could not retreive response from remote server. Response is null. This might be caused by SSL errors. Please try using -IgnoreSSLErrors as argument and try again.');
         return 'No response from remote server';
     }
 
@@ -2461,7 +2461,7 @@ object Zone "' + $this.getProperty('local_hostname') + '" {
                 # Replace the host object placeholders
                 [string]$host_object_json = $this.doReplaceJSONPlaceholders($this.config('director_host_object'));
                 # Create the host object inside the director
-                [string]$httpResponse = $this.createHTTPRequest($url, $host_object_json, 'PUT', 'application/json', $FALSE, $FALSE);
+                [string]$httpResponse = $this.createHTTPRequest($url, $host_object_json, 'PUT', 'application/json', $FALSE, $this.config('debug_mode'));
 
                 if ($this.isHTTPResponseCode($httpResponse) -eq $FALSE) {
                     $this.info([string]::Format('Placed query for creating host "{0}" inside Icinga Director. Config: {1}',
@@ -2534,7 +2534,7 @@ object Zone "' + $this.getProperty('local_hostname') + '" {
             # would result in making this request quite useless
 
             [string]$url = $this.config('director_url') + 'self-service/api-version';
-            [string]$versionString = $this.createHTTPRequest($url, '', 'POST', 'application/json', $FALSE, $FALSE);
+            [string]$versionString = $this.createHTTPRequest($url, '', 'POST', 'application/json', $FALSE, $this.config('debug_mode'));
 
             if ($this.isHTTPResponseCode($versionString) -eq $FALSE) {
                 # Remove all characters we do not need inside the string
@@ -2543,6 +2543,9 @@ object Zone "' + $this.getProperty('local_hostname') + '" {
                 $this.setProperty('icinga_director_api_version', $versionString);
                 return;
             } else {
+                if ($versionString -eq '900') {
+                    throw 'Failed to query Icinga Director API. Received error code 900. Please enable debug mode with -DebugMode for the script run to reteive additional information regarding this error.';
+                }
                 $this.warn('You seem to use an older Version of the Icinga Director, as no API version could be retreived.');
                 $this.setProperty('icinga_director_api_version', '0.0.0');
                 return;
@@ -2760,7 +2763,7 @@ object Zone "' + $this.getProperty('local_hostname') + '" {
                                         $this.config('director_url'),
                                         $token
                                         );
-        [string]$argumentString = $this.createHTTPRequest($url, '', 'POST', 'application/json', $TRUE, $FALSE);
+        [string]$argumentString = $this.createHTTPRequest($url, '', 'POST', 'application/json', $TRUE, $this.config('debug_mode'));
 
         if ($this.isHTTPResponseCode($argumentString) -eq $FALSE) {
             # First split the entire result based in new-lines into an array
