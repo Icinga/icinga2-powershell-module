@@ -1295,7 +1295,7 @@ function Icinga2AgentModule {
         if ($credentials.Contains(':')) {
             [int]$delimeter = $credentials.IndexOf(':');
             $newUser = $credentials.Substring(0, $delimeter);
-            $password = [string]::Format(' password={0}', $credentials.Substring($delimeter + 1, $credentials.Length - 1 - $delimeter));
+            $password = [string]::Format(' password= {0}', $credentials.Substring($delimeter + 1, $credentials.Length - 1 - $delimeter));
         } else {
             $newUser = $credentials;
         }
