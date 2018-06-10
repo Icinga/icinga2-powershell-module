@@ -1635,7 +1635,7 @@ object Zone "' + $this.getProperty('local_hostname') + '" {
     #
     $installer | Add-Member -membertype ScriptMethod -name 'getHashFromString' -value {
         param([string]$text);
-        [System.Object]$algorithm = New-Object System.Security.Cryptography.SHA1Managed;
+        [System.Object]$algorithm = New-Object System.Security.Cryptography.SHA1CryptoServiceProvider;
         $hash = [System.Text.Encoding]::UTF8.GetBytes($text);
         $hashInBytes = $algorithm.ComputeHash($hash);
         [string]$result = '';
