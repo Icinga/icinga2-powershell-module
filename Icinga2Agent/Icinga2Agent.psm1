@@ -2074,6 +2074,16 @@ object Zone "' + $this.getProperty('local_hostname') + '" {
                 $this.info('Icinga 2 configuration check successfull.');
             }
         } else {
+            # Throw an exception in case we use a parent zone which is a global zone
+            foreach ($zone in $this.config('global_zones')) {
+                if ($zone -eq $this.config('parent_zone')) {
+                    $this.exception([string]::Format('The zone specified for the Icinga 2 Agent to connect to is set to "{0}". This is a global zone which cannot be used. Please review either your arguments used for this module or the Host-Template within the Icinga Director to use the correct zone for this Agent.', $this.config('parent_zone')));
+                }
+            }
+            # In case no parent endpoints are configured, print a warning as we can't write valid Icinga 2 configuration
+            if (-Not $this.config('parent_endpoints')) {
+                $this.warn('No parent endpoints have been defined within the module call. Either specify them by using the "-ParentEndpoints" argument or ensure you configured your Icinga Director properly in case you are using the Self-Service API. Icinga2.conf has not been generated.');
+            }
             $this.info('icinga2.conf did not change or required parameters not set. Nothing to do');
         }
     }
