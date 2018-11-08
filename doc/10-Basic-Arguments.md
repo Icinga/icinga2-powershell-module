@@ -88,6 +88,12 @@ This argument will define if the Icinga 2 debug log will be enabled or disabled.
 
 Default value: **$FALSE**
 
+## -IcingaDisableLogging (optional)
+
+This argument will define if we enable or disable the Icinga 2 logging feature
+
+Default value: **$FALSE**
+
 ## -AgentAddFirewallRule (optional)
 
 Allows to specify if the PowerShell Module will add a firewall rule, allowing Icinga 2 masters or
