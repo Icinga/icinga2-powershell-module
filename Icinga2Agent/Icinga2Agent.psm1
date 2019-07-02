@@ -34,10 +34,10 @@ function Icinga2AgentModule {
         # Like -FetchAgentName, this argument will ensure the hostname is set inside the script, will however include the domain to provide the FQDN internally.
         [switch]$FetchAgentFQDN             = $FALSE,
         # Allows to transform the hostname to either lower or upper case if required. 0: Do nothing 1: To lower case 2: To upper case
-        [int]$TransformHostname             = 0,
+        [int]$TransformHostname             = -1,
 
         # This variable allows to specify on which port the Icinga 2 Agent will listen on
-        [int]$AgentListenPort               = 5665,
+        [int]$AgentListenPort               = -1,
         # Each Icinga 2 Agent is in general forwarding it's check results to a parent master or satellite zone. Here you will have to specify the name of the parent zone
         [string]$ParentZone,#
         # Icinga 2 internals to make it configurable if the Agent is accepting configuration from the Icinga config master.
@@ -53,7 +53,7 @@ function Icinga2AgentModule {
         # While -ParentEndpoints will define the name of endpoints by an array, this parameter will allow to assign IP address and port configuration, allowing the Icinga 2 Agent to directly connect to parent Icinga 2 instances. To specify IP address and port, you will have to seperate these entries by using ';' without blank spaces. The order of the config has to match the assignment of -ParentEndpoints. You can specify the IP address only without a port definition by just leaving the last part. If you wish to not specify a config for a specific endpoint, simply add an empty string to the correct location.
         [array]$EndpointsConfig,
         # Allows to specify global zones, which will be added into the icinga2.conf. Note: In case no global zone will be defined, director-global will be added by default. If you specify zones by yourself, please ensure to add director-global as this is not done automaticly when adding custom global-zones.
-        [array]$GlobalZones                 = @( 'director-global' ),
+        [array]$GlobalZones                 = @(),
         
 
         # Agent installation / update
@@ -74,7 +74,7 @@ function Icinga2AgentModule {
         #With this parameter you can define a download Url or local directory from which the module will download/install a specific Icinga 2 Agent MSI Installer package. Please ensure to only define the base download Url / Directory, as the Module will generate the MSI file name based on your operating system architecture and the version to install. The Icinga 2 MSI Installer name is internally build as follows: Icinga2-v[InstallAgentVersion]-[OSArchitecture].msi
 
         # Full example: Icinga2-v2.8.0-x86_64.msi
-        [string]$DownloadUrl                = 'https://packages.icinga.com/windows/',
+        [string]$DownloadUrl,
         # Allows to specify in which directory the Icinga 2 Agent will be installed into. In case of an Agent update you can specify with this argument a new directory the new Agent will be installed into. The old directory will be removed caused by the required uninstaller process.
         [string]$AgentInstallDirectory,
         # In case the Icinga 2 Agent is already installed on the system, this parameter will allow you to configure if you wish to upgrade / downgrade to a specified version with the -InstallAgentVersion parameter as well. If none of both parameters is defined, the module will not update or downgrade the agent.
@@ -215,11 +215,59 @@ function Icinga2AgentModule {
     }
 
     #
+    # In case we run the script not through Icinga Director, we might want to set
+    # script default values
+    #
+    $installer | Add-Member -membertype ScriptMethod -name 'setScriptDefaultVariables' -value {
+        if ($this.cfg['transform_hostname'] -eq -1) {
+            $this.cfg['transform_hostname'] = 0;
+            $this.debug('Setting "transform_hostname" to default 0');
+        }
+        if ($this.cfg['download_url'] -eq '') {
+            $this.cfg['download_url'] = 'https://packages.icinga.com/windows/';
+            $this.debug('Setting "download_url" to default "https://packages.icinga.com/windows/"');
+        }
+        if ($this.cfg['agent_listen_port'] -eq -1) {
+            $this.cfg['agent_listen_port'] = 5665;
+            $this.debug('Setting "agent_listen_port" to default 5665');
+        }
+        if ($this.cfg['global_zones'].Count -eq 0) {
+            $this.cfg['global_zones'] = @( 'director-global' );
+            $this.debug('Setting "global_zones" to default "director-global"');
+        }
+    }
+
+    #
     # Override the given arguments of the PowerShell script with
     # custom values or edited values
     #
     $installer | Add-Member -membertype ScriptMethod -name 'overrideConfig' -value {
-        param([string] $key, $value);
+        param([string] $key, $value, $keepScriptArguments);
+
+        # Ensure the director will not override our custom config for arguments
+        if ($keepScriptArguments) {
+            $scriptValue = $this.cfg[$key];
+
+            if ([string]::IsNullOrEmpty($scriptValue) -eq $FALSE) {
+                if ($scriptValue.GetType().Name -eq 'SwitchParameter' -And $scriptValue -eq $TRUE) {
+                    $this.debug("Skipping overriding of '$key', as set by script. [$scriptValue]");
+                    return;
+                }
+
+                if ($scriptValue.GetType().Name -eq 'SwitchParameter' -And $scriptValue -eq $FALSE) {
+                    # Do not keep value
+                } elseif ($scriptValue.GetType().Name -eq 'Int32' -And $scriptValue -eq -1) {
+                    # Do not keep value
+                } elseif ([string]::IsNullOrEmpty($scriptValue) -eq $FALSE) {
+                    $this.debug("Skipping overriding of '$key', as set by script. [$scriptValue]");
+                    return;
+                } else {
+                    $this.debug("Skipping overriding of '$key', as set by script. [$scriptValue]");
+                    return;
+                }
+            }
+        }
+
         $this.cfg[$key] = $value;
     }
 
@@ -2701,7 +2749,7 @@ object Zone "' + $this.getProperty('local_hostname') + '" {
             }
 
             # If our PowerShell Version is supporting the function, convert it to a valid string
-            $this.overrideConfig('director_host_object', (ConvertTo-Json -Compress $json));
+            $this.overrideConfig('director_host_object', (ConvertTo-Json -Compress $json), $FALSE);
         }
     }
 
@@ -2817,14 +2865,14 @@ object Zone "' + $this.getProperty('local_hostname') + '" {
 
                         if ($value.Contains( '!')) {
                             [array]$valueArray = $value.Split('!');
-                            $this.overrideConfig($argument, $valueArray);
+                            $this.overrideConfig($argument, $valueArray, $TRUE);
                         } else {
                             if ($value.toLower() -eq 'true') {
-                                $this.overrideConfig($argument, $TRUE);
+                                $this.overrideConfig($argument, $TRUE, $TRUE);
                             } elseif ($value.toLower() -eq 'false') {
-                                $this.overrideConfig($argument, $FALSE);
+                                $this.overrideConfig($argument, $FALSE, $TRUE);
                             } else {
-                                $this.overrideConfig($argument, $value);
+                                $this.overrideConfig($argument, $value, $TRUE);
                             }
                         }
                     } else {
@@ -3127,6 +3175,8 @@ object Zone "' + $this.getProperty('local_hostname') + '" {
             # Establish connection to Icinga Director Self-Service API if required
             # and fetch basic / host configuration if tokens are set
             $this.connectToIcingaDirectorSelfServiceAPI();
+            # Set Script defaults
+            $this.setScriptDefaultVariables();
             # Get host name or FQDN if required
             $this.fetchHostnameOrFQDN();
             # Get IP-Address of host
