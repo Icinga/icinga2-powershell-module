@@ -41,7 +41,7 @@ function Icinga2AgentModule {
         # Each Icinga 2 Agent is in general forwarding it's check results to a parent master or satellite zone. Here you will have to specify the name of the parent zone
         [string]$ParentZone,#
         # Icinga 2 internals to make it configurable if the Agent is accepting configuration from the Icinga config master.
-        [bool]$AcceptConfig                 = $TRUE,
+        [int]$AcceptConfig                  = -1,
         # This argument will define if the Icinga 2 debug log will be enabled or disabled.
         [switch]$IcingaEnableDebugLog       = $FALSE,
         # This argument will define if we enable or disable the Icinga 2 logging feature
@@ -234,6 +234,10 @@ function Icinga2AgentModule {
         if ($this.cfg['global_zones'].Count -eq 0) {
             $this.cfg['global_zones'] = @( 'director-global' );
             $this.debug('Setting "global_zones" to default "director-global"');
+        }
+        if ($this.cfg['accept_config'] -eq -1) {
+            $this.cfg['accept_config'] = $TRUE;
+            $this.debug('Setting "accept_config" to default "true"');
         }
     }
 
