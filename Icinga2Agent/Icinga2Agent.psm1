@@ -2220,28 +2220,36 @@ object Zone "' + $this.getProperty('local_hostname') + '" {
     # easier
     #
     $installer | Add-Member -membertype ScriptMethod -name 'fetchHostnameOrFQDN' -value {
-        if ($this.config('fetch_agent_fqdn') -And (Get-WmiObject win32_computersystem).Domain) {
-            [string]$hostname = [string]::Format('{0}.{1}',
-                                                (Get-WmiObject win32_computersystem).DNSHostName,
-                                                (Get-WmiObject win32_computersystem).Domain
-                                                );
-            $this.setProperty('local_hostname', $hostname);
-            $this.info([string]::Format('Setting internal Agent Name to "{0}"', $this.getProperty('local_hostname')));
-        } elseif ($this.config('fetch_agent_name')) {
-            [string]$hostname = (Get-WmiObject win32_computersystem).DNSHostName;
-            $this.setProperty('local_hostname', $hostname);
-            $this.info([string]::Format('Setting internal Agent Name to "{0}"', $this.getProperty('local_hostname')));
-        }
 
-         # Add additional variables to our config for more user-friendly usage
+        # Add additional variables to our config for more user-friendly usage
         [string]$host_fqdn = [string]::Format('{0}.{1}',
-                                                (Get-WmiObject win32_computersystem).DNSHostName,
-                                                (Get-WmiObject win32_computersystem).Domain
-                                                );
-        [string]$hostname = (Get-WmiObject win32_computersystem).DNSHostName;
+                                 (Get-WmiObject win32_computersystem).DNSHostName,
+                                 (Get-WmiObject win32_computersystem).Domain
+                             );
 
-        $this.setProperty('fqdn', $host_fqdn);
-        $this.setProperty('hostname', $hostname);
+        if ([string]::IsNullOrEmpty($this.config('agent_name')) -eq $FALSE) {
+            $this.setProperty('local_hostname', $this.config('agent_name'));
+            $this.setProperty('fqdn', $host_fqdn);
+            $this.setProperty('hostname', $this.config('agent_name'));
+        } else {
+            if ($this.config('fetch_agent_fqdn') -And (Get-WmiObject win32_computersystem).Domain) {
+                [string]$hostname = [string]::Format('{0}.{1}',
+                                                    (Get-WmiObject win32_computersystem).DNSHostName,
+                                                    (Get-WmiObject win32_computersystem).Domain
+                                                    );
+                $this.setProperty('local_hostname', $hostname);
+            } elseif ($this.config('fetch_agent_name')) {
+                [string]$hostname = (Get-WmiObject win32_computersystem).DNSHostName;
+                $this.setProperty('local_hostname', $hostname);
+            }
+
+            $this.info([string]::Format('Setting internal Agent Name to "{0}"', $this.getProperty('local_hostname')));
+
+            [string]$hostname = (Get-WmiObject win32_computersystem).DNSHostName;
+
+            $this.setProperty('fqdn', $host_fqdn);
+            $this.setProperty('hostname', $hostname);
+        }
 
         if (-Not $this.getProperty('local_hostname')) {
             $this.warn('You have not specified an Agent Name or turned on to auto fetch this information.');
