@@ -519,6 +519,8 @@ function Icinga2AgentModule {
         $this.setProperty('cert_dir', (Join-Path -Path $Env:ProgramData -ChildPath 'icinga2\var\lib\icinga2\certs'));
         $this.setProperty('icinga_ticket', $this.config('ticket'));
         $this.setProperty('local_hostname', $this.config('agent_name'));
+        # Set Script defaults
+        $this.setScriptDefaultVariables();
         # Ensure we generate the required configuration content
         $this.generateConfigContent();
     }
@@ -3187,8 +3189,6 @@ object Zone "' + $this.getProperty('local_hostname') + '" {
             # Establish connection to Icinga Director Self-Service API if required
             # and fetch basic / host configuration if tokens are set
             $this.connectToIcingaDirectorSelfServiceAPI();
-            # Set Script defaults
-            $this.setScriptDefaultVariables();
             # Get host name or FQDN if required
             $this.fetchHostnameOrFQDN();
             # Get IP-Address of host
