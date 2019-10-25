@@ -29,7 +29,7 @@ function Icinga2AgentModule {
         [string]$Ticket,
         # You can either leave this parameter or add it to allow the module to install or update the Icinga 2 Agent on your system
         [string]$InstallAgentVersion,
-        # Instead of setting the Agent Name with -AgentName, the PowerShell module is capable of retreiving the information automaticly from Windows. Please note this is not the FQDN
+        # Instead of setting the Agent Name with -AgentName, the PowerShell module is capable of retreiving the information automatically from Windows. Please note this is not the FQDN
         [switch]$FetchAgentName             = $FALSE,
         # Like -FetchAgentName, this argument will ensure the hostname is set inside the script, will however include the domain to provide the FQDN internally.
         [switch]$FetchAgentFQDN             = $FALSE,
@@ -52,7 +52,7 @@ function Icinga2AgentModule {
         [array]$ParentEndpoints,
         # While -ParentEndpoints will define the name of endpoints by an array, this parameter will allow to assign IP address and port configuration, allowing the Icinga 2 Agent to directly connect to parent Icinga 2 instances. To specify IP address and port, you will have to seperate these entries by using ';' without blank spaces. The order of the config has to match the assignment of -ParentEndpoints. You can specify the IP address only without a port definition by just leaving the last part. If you wish to not specify a config for a specific endpoint, simply add an empty string to the correct location.
         [array]$EndpointsConfig,
-        # Allows to specify global zones, which will be added into the icinga2.conf. Note: In case no global zone will be defined, director-global will be added by default. If you specify zones by yourself, please ensure to add director-global as this is not done automaticly when adding custom global-zones.
+        # Allows to specify global zones, which will be added into the icinga2.conf. Note: In case no global zone will be defined, director-global will be added by default. If you specify zones by yourself, please ensure to add director-global as this is not done automatically when adding custom global-zones.
         [array]$GlobalZones                 = @(),
         
 
@@ -107,7 +107,7 @@ function Icinga2AgentModule {
         [string]$DirectorPassword,
         # TODO
         [string]$DirectorDomain,
-        # API key for specific host templates, allowing the configuration and creation of host objects within the Icinga Director without password authentication. This is the API token assigned to a host template. Hosts created with this token, will automaticly receive the Host-Template assigned to the API key. Furthermore this token allows to access the Icinga Director Self-Service API to fetch basic arguments for the module.
+        # API key for specific host templates, allowing the configuration and creation of host objects within the Icinga Director without password authentication. This is the API token assigned to a host template. Hosts created with this token, will automatically receive the Host-Template assigned to the API key. Furthermore this token allows to access the Icinga Director Self-Service API to fetch basic arguments for the module.
         # Note: This argument requires Icinga Director API Version 1.4.0 or higher
         [string]$DirectorAuthToken,
         # This argument allows you to parse either a valid JSON-String or an hashtable / array, containing all informations for the host object to create. Please note that using arrays or hashtable objects for this argument will require PowerShell version 3 and above.
@@ -145,7 +145,7 @@ function Icinga2AgentModule {
         [switch]$IgnoreSSLErrors            = $FALSE,
 
         [switch]$DebugMode                  = $FALSE,
-        # Specify a path to either a directory or a file to write all output from the PowerShell module into a file for later debugging. In case a directory is specified, the script will automaticly create a new file with a unique name into it. If a file is specified which is not yet present, it will be created.
+        # Specify a path to either a directory or a file to write all output from the PowerShell module into a file for later debugging. In case a directory is specified, the script will automatically create a new file with a unique name into it. If a file is specified which is not yet present, it will be created.
         [string]$ModuleLogFile
     );
 
@@ -1617,7 +1617,7 @@ if (PowerShellIcinga2EnableDebug) {
  * IMPORTANT: If the NSClient++ is installed newly to the system, the
  * Icinga Service has to be restarted in order to set this variable
  * correctly. If the NSClient++ is installed over the PowerShell Module,
- * the Icinga 2 Service is restarted automaticly.
+ * the Icinga 2 Service is restarted automatically.
  */
 if (!globals.contains("NscpPath")) {
   NscpPath = dirname(msi_get_component_path("{5C45463A-4AE9-4325-96DB-6E239C034F93}"))
@@ -1640,7 +1640,7 @@ object Zone "' + $this.config('parent_zone') + '" {
 }
 
 /* All of our global zones, check commands and other configuration are synced into.
- * Director global zone must be defined in case the Icinga Director is beeing used.
+ * Director global zone must be defined in case the Icinga Director is being used.
  * Default value for this is "director-global".
  * All additional zones can be configured with -GlobalZones argument.
  * IMPORTANT: If -GlobalZones argument is used, the Icinga Director global zones has
@@ -3220,7 +3220,7 @@ object Zone "' + $this.getProperty('local_hostname') + '" {
                     $this.installAgent();
                     $this.cleanupAgentInstaller();
                 } else {
-                    $this.warn('Icinga 2 Agent is not installed and not allowed of beeing installed.');
+                    $this.warn('Icinga 2 Agent is not installed and its install is not being allowed.');
                 }
             }
 
