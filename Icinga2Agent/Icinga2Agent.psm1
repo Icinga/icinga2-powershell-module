@@ -233,6 +233,7 @@ function Icinga2AgentModule {
         }
         if ($this.cfg['global_zones'].Count -eq 0) {
             $this.cfg['global_zones'] = @( 'director-global' );
+            $this.generateGlobalZones();
             $this.debug('Setting "global_zones" to default "director-global"');
         }
         if ($this.cfg['accept_config'] -eq -1) {
