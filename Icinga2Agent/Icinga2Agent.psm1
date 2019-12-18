@@ -2672,23 +2672,8 @@ object Zone "' + $this.getProperty('local_hostname') + '" {
         if (-Not $requiredVersion -Or -Not $providedVersion) {
             return $FALSE;
         }
-
-        [array]$requiredVersion = $requiredVersion.Split('.');
-        $currentVersion = $providedVersion;
-
-        if ([int]$requiredVersion[0] -gt [int]$currentVersion[0]) {
-            return $FALSE;
-        }
-
-        if ([int]$requiredVersion[1] -gt [int]$currentVersion[1]) {
-            return $FALSE;
-        }
-
-        if ([int]$requiredVersion[1] -ge [int]$currentVersion[1] -And [int]$requiredVersion[2] -gt [int]$currentVersion[2]) {
-            return $FALSE;
-        }
-
-        return $TRUE;
+		return ([version]$requiredVersion -lt [version]($providedVersion -join '.'))
+        
     }
 
     #
