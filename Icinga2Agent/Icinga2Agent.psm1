@@ -1589,8 +1589,10 @@ object ApiListener "api" {' + $certificateConfig + '
 include "constants.conf"
 include <itl>
 include <plugins>
-include <nscp>
+include <plugins-contrib>
+include <manubulon>
 include <windows-plugins>
+include <nscp>
 
 /* Required for Icinga 2.8.0 and above */
 const NodeName = "' + $this.getProperty('local_hostname') + '"
