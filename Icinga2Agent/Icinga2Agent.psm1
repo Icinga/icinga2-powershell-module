@@ -990,7 +990,7 @@ function Icinga2AgentModule {
         $this.info('Installing Icinga 2 Agent');
 
         # Start the installer process
-        $result = $this.startProcess('MsiExec.exe', $TRUE, [string]::Format('/quiet /i "{0}" {1}', $this.getInstallerPath(), $this.getIcingaAgentInstallerArguments()));
+        $result = $this.startProcess('MsiExec.exe', $TRUE, [string]::Format('/quiet /norestart /i "{0}" {1}', $this.getInstallerPath(), $this.getIcingaAgentInstallerArguments()));
 
         # Exit Code 0 means the Agent was installed successfully
         # Otherwise we require to throw an error
@@ -1025,7 +1025,7 @@ function Icinga2AgentModule {
 
         $this.info('Removing previous Icinga 2 Agent version');
         # Start the uninstaller process
-        $result = $this.startProcess('MsiExec.exe', $TRUE, $this.getProperty('uninstall_id') +' /q');
+        $result = $this.startProcess('MsiExec.exe', $TRUE, $this.getProperty('uninstall_id') +' /norestart /q');
 
         # Exit Code 0 means the Agent was removed successfully
         # Otherwise we require to throw an error
@@ -1040,7 +1040,7 @@ function Icinga2AgentModule {
 
         $this.info('Installing new Icinga 2 Agent version');
         # Start the installer process
-        $result = $this.startProcess('MsiExec.exe', $TRUE, [string]::Format('/quiet /i "{0}" {1}', $this.getInstallerPath(), $this.getIcingaAgentInstallerArguments()));
+        $result = $this.startProcess('MsiExec.exe', $TRUE, [string]::Format('/quiet /norestart /i "{0}" {1}', $this.getInstallerPath(), $this.getIcingaAgentInstallerArguments()));
 
         # Exit Code 0 means the Agent was removed successfully
         # Otherwise we require to throw an error
@@ -3001,7 +3001,7 @@ object Zone "' + $this.getProperty('local_hostname') + '" {
                     [string]$NSClientArguments = $this.getNSClientInstallerArguments();
 
                     # Start the installer process
-                    $result = $this.startProcess('MsiExec.exe', $TRUE, [string]::Format('/quiet /i "{0}" {1}', $installerPath, $NSClientArguments));
+                    $result = $this.startProcess('MsiExec.exe', $TRUE, [string]::Format('/quiet /norestart /i "{0}" {1}', $installerPath, $NSClientArguments));
 
                     # Exit Code 0 means the NSClient was installed successfully
                     # Otherwise we require to throw an error
@@ -3281,7 +3281,7 @@ object Zone "' + $this.getProperty('local_hostname') + '" {
 
         if ($this.isAgentInstalled()) {
             $this.info('Removing Icinga 2 Agent from the system');
-            $result = $this.startProcess('MsiExec.exe', $TRUE, [string]::Format('{0} /q', $this.getProperty('uninstall_id')));
+            $result = $this.startProcess('MsiExec.exe', $TRUE, [string]::Format('{0} /norestart /q', $this.getProperty('uninstall_id')));
 
             if ($result.Get_Item('exitcode') -ne 0) {
                 $this.error($result.Get_Item('message'));
