@@ -1851,10 +1851,11 @@ object Zone "' + $this.getProperty('local_hostname') + '" {
 
             # Save Certificate
             $this.info("Storing Icinga 2 certificates");
-            $result = $this.startProcess($icingaBinary, $FALSE, [string]::Format('pki save-cert --key {0}{1}.key --trustedcert {0}trusted-master.crt --host {2}',
+            $result = $this.startProcess($icingaBinary, $FALSE, [string]::Format('pki save-cert --key {0}{1}.key --trustedcert {0}trusted-master.crt --host {2} --port {3}',
                                                                                 $icingaCertDir,
                                                                                 $agentName,
-                                                                                $this.config('ca_server')
+                                                                                $this.config('ca_server'),
+                                                                                $this.config('ca_port')
                                                                                 )
                                         );
             if ($result.Get_Item('exitcode') -ne 0) {
