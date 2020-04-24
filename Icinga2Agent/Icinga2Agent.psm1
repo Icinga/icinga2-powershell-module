@@ -3073,7 +3073,7 @@ object Zone "' + $this.getProperty('local_hostname') + '" {
         [string]$NSClientArguments = '';
 
         if ($this.config('nsclient_directory')) {
-            $NSClientArguments += [string]::Format(' INSTALLLOCATION={0}', $this.config('nsclient_directory'));
+            $NSClientArguments += [string]::Format(' INSTALLLOCATION="{0}"', $this.config('nsclient_directory'));
         }
 
         return $NSClientArguments;
