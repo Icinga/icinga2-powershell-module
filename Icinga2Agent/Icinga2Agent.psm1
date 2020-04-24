@@ -146,7 +146,9 @@ function Icinga2AgentModule {
 
         [switch]$DebugMode                  = $FALSE,
         # Specify a path to either a directory or a file to write all output from the PowerShell module into a file for later debugging. In case a directory is specified, the script will automatically create a new file with a unique name into it. If a file is specified which is not yet present, it will be created.
-        [string]$ModuleLogFile
+        [string]$ModuleLogFile,
+        # Timeout for web requests in milliseconds
+        [int]$Timeout                        = 6000
     );
 
     #
@@ -201,6 +203,7 @@ function Icinga2AgentModule {
         ignore_ssl_errors       = $IgnoreSSLErrors;
         debug_mode              = $DebugMode;
         module_log_file         = $ModuleLogFile;
+        timeout                 = $Timeout;
     }
 
     #
@@ -678,7 +681,7 @@ function Icinga2AgentModule {
         if ($directorHeader) {
             $httpRequest.Headers.Add('X-Director-Accept: text/plain');
         }
-        $httpRequest.TimeOut = 6000;
+        $httpRequest.TimeOut = $this.config('timeout');
 
         # If we are using self-signed certificates for example, the HTTP request will
         # fail caused by the SSL certificate. With this we can allow even faulty
