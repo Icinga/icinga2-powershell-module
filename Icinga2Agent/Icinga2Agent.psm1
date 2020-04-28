@@ -1854,13 +1854,28 @@ object Zone "' + $this.getProperty('local_hostname') + '" {
 
             # Save Certificate
             $this.info("Storing Icinga 2 certificates");
-            $result = $this.startProcess($icingaBinary, $FALSE, [string]::Format('pki save-cert --key {0}{1}.key --trustedcert {0}trusted-master.crt --host {2} --port {3}',
-                                                                                $icingaCertDir,
-                                                                                $agentName,
-                                                                                $this.config('ca_server'),
-                                                                                $this.config('ca_port')
-                                                                                )
-                                        );
+            # Argument --key for save-cert is deprecated starting with Icinga 2.12.0
+            if ($this.validateVersions('2.12.0', $this.getProperty('icinga2_agent_version'))) {
+                $result = $this.startProcess(
+                    $icingaBinary, $FALSE, [string]::Format(
+                        'pki save-cert --trustedcert {0}trusted-master.crt --host {1} --port {2}',
+                        $icingaCertDir,
+                        $this.config('ca_server'),
+                        $this.config('ca_port')
+                    )
+                );
+            } else {
+                $result = $this.startProcess(
+                    $icingaBinary, $FALSE, [string]::Format(
+                        'pki save-cert --key {0}{1}.key --trustedcert {0}trusted-master.crt --host {2} --port {3}',
+                        $icingaCertDir,
+                        $agentName,
+                        $this.config('ca_server'),
+                        $this.config('ca_port')
+                    )
+                );
+            }
+
             if ($result.Get_Item('exitcode') -ne 0) {
                 throw $result.Get_Item('message');
             }
