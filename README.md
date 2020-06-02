@@ -1,4 +1,9 @@
-﻿Icinga 2 Powershell Module
+﻿Deprecation Notice
+===
+
+This module is deprecated with version 1.3.0. Please use the new [Icinga for Windows](https://icinga.com/docs/windows/latest/) solution for future projects.
+
+Icinga 2 Powershell Module
 ==============
 
 Welcome to the Icinga 2 PowerShell Module - the most flexible and easy way to configure and install

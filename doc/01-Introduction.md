@@ -1,3 +1,8 @@
+Deprecation Notice
+===
+
+This module is deprecated with version 1.3.0. Please use the new [Icinga for Windows](https://icinga.com/docs/windows/latest/) solution for future projects.
+
 Introduction
 ==============
 
