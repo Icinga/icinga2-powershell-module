@@ -2244,21 +2244,15 @@ object Zone "' + $this.getProperty('local_hostname') + '" {
     $installer | Add-Member -membertype ScriptMethod -name 'fetchHostnameOrFQDN' -value {
 
         # Add additional variables to our config for more user-friendly usage
-        [string]$host_fqdn = [string]::Format('{0}.{1}',
-                                 (Get-WmiObject win32_computersystem).DNSHostName,
-                                 (Get-WmiObject win32_computersystem).Domain
-                             );
+        [string]$host_fqdn = [System.Net.Dns]::GetHostEntry("localhost").HostName
 
         if ([string]::IsNullOrEmpty($this.config('agent_name')) -eq $FALSE) {
             $this.setProperty('local_hostname', $this.config('agent_name'));
             $this.setProperty('fqdn', $host_fqdn);
             $this.setProperty('hostname', $this.config('agent_name'));
         } else {
-            if ($this.config('fetch_agent_fqdn') -And (Get-WmiObject win32_computersystem).Domain) {
-                [string]$hostname = [string]::Format('{0}.{1}',
-                                                    (Get-WmiObject win32_computersystem).DNSHostName,
-                                                    (Get-WmiObject win32_computersystem).Domain
-                                                    );
+            if ($this.config('fetch_agent_fqdn')) {
+                [string]$hostname = [System.Net.Dns]::GetHostEntry("localhost").HostName
                 $this.setProperty('local_hostname', $hostname);
             } elseif ($this.config('fetch_agent_name')) {
                 [string]$hostname = (Get-WmiObject win32_computersystem).DNSHostName;
